@@ -1,0 +1,26 @@
+.kotlin/
+ogrodje-*
+.envrc
+
+# Devenv
+.devenv*
+devenv.local.nix
+devenv.local.yaml
+
+# direnv
+.direnv
+
+# pre-commit
+.pre-commit-config.yaml
+
+.idea/
+*/out/
+**/.gradle/
+for_tests/
+classes/*
+**/build
+verification-*
+.idea/shelf
+/.idea/compiler.xml
+/.idea/kotlinc.xml
+/.idea/misc.xml

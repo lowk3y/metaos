@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: 'postgres:18-alpine'
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    ports:
+      - '5437:5432'
+    volumes:
+      - pg-data:/var/lib/postgresql
+    labels:
+      org.springframework.boot.jdbc.parameters: '' # ssl=true&sslmode=require'
+
+volumes:
+  pg-data:
+    driver: "local"
+    driver_opts:
+      type: none
+      device: "$HOME/docker-volumes/pg-metaos"
+      o: bind
