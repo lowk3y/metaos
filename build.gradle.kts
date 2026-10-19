@@ -104,9 +104,39 @@ tasks.withType<Test> {
     }
 }
 
+// The front-end (fe/), with devenv's Node and Yarn. Only bootJar builds it, into the jar's static/ (Frontend.kt):
+// runs and tests do without, as in development Vite serves fe/ itself.
+val fe = layout.projectDirectory.dir("fe")
+
+// Looked up on this build's PATH: Java finds commands on the PATH its JVM started with, and the Gradle daemon may have
+// started outside the devenv shell, e.g. from IntelliJ
+val yarn = providers.environmentVariable("PATH").getOrElse("").split(File.pathSeparator)
+    .map { File(it, "yarn") }.firstOrNull { it.canExecute() }?.path ?: "yarn"
+
+val feInstall by tasks.registering(Exec::class) {
+    group = "build"
+    description = "Installs fe/'s packages, as yarn.lock has them."
+    workingDir(fe)
+    commandLine(yarn, "install", "--immutable")
+    inputs.files(fe.file("package.json"), fe.file("yarn.lock"), fe.file(".yarnrc.yml"))
+    // Yarn's record of what it installed - cheaper to check than all of node_modules
+    outputs.file(fe.file("node_modules/.yarn-state.yml"))
+}
+
+val feBuild by tasks.registering(Exec::class) {
+    group = "build"
+    description = "Type-checks fe/ and builds it into fe/dist."
+    dependsOn(feInstall)
+    workingDir(fe)
+    commandLine(yarn, "build")
+    inputs.files(fileTree(fe) { exclude("node_modules/**", "dist/**", ".git/**", ".yarn/**") })
+    outputs.dir(fe.dir("dist"))
+}
+
 // Fixed name, so docker/Dockerfile doesn't depend on the version
 tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {
     archiveFileName = "metaos.jar"
+    from(feBuild) { into("BOOT-INF/classes/static") }
 }
 
 tasks.named<org.springframework.boot.gradle.tasks.run.BootRun>("bootRun") {

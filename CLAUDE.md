@@ -10,6 +10,29 @@ MetaOS was designed for scaling, optimising and helping grow the [Ogrodje] organ
 - The project is written in Kotlin and uses Spring Boot at its core.
 - Services and infrastructure is deployed via Kubernetes
 
+### Front-end
+
+The web front-end lives in [`fe/`](fe): Vue 3 with TypeScript, built by Vite, with Pinia for state and Vue Router.
+Node and Yarn (Berry) come from devenv (`languages.javascript` in `devenv.nix`). Yarn installs into `node_modules`
+(`nodeLinker: node-modules` in `fe/.yarnrc.yml`), as Vite doesn't support Plug'n'Play: under it pinia couldn't find its
+`@vue/devtools-api` peer dependency.
+
+```bash
+cd fe
+yarn            # install
+yarn dev        # dev server with hot reload, http://localhost:5173
+yarn build      # type-check (vue-tsc) and build into fe/dist
+```
+
+- The devenv shell runs `yarn install` in `fe/` when `yarn.lock` has changed, and `devenv up` runs `yarn dev`. Vite
+  proxies `/graphql` and `/config.json` to MetaOS on `:8080`, so in development too the browser sees one origin.
+- `./gradlew bootJar` builds `fe/` (`feInstall`, `feBuild`) with the devenv's Node and Yarn, so it needs the devenv
+  shell, and puts it into the jar's `static/`. [`Frontend.kt`](src/main/kotlin/si/ogrodje/metaos/Frontend.kt) serves
+  it: the files, and `index.html` for the router's paths (`createWebHistory`); its files and pages are public, while
+  its data needs a token. Runs and tests don't build `fe/`.
+- `/config.json` tells the front-end where users sign in (the Keycloak issuer) and as which client
+  (`metaos.frontend.client-id`), so one build works in every environment.
+
 ### Authentication (Keycloak)
 
 The MCP endpoint (`/mcp`) is an OAuth2 resource server. [Keycloak] from `compose.yml` is the identity provider /

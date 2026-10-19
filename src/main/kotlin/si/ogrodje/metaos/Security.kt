@@ -1,9 +1,11 @@
 package si.ogrodje.metaos
 
+import jakarta.servlet.DispatcherType
 import org.springaicommunity.mcp.security.server.config.McpServerOAuth2Configurer.mcpServerOAuth2
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.http.HttpMethod
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.http.SessionCreationPolicy
 import org.springframework.security.core.context.SecurityContextHolder
@@ -42,6 +44,11 @@ class SecurityConfig {
             // The k8s probes, on the server port - public through the Ingress, but they only say UP or DOWN
             it.requestMatchers("/livez", "/readyz").permitAll()
             it.requestMatchers("/mcp/**").hasAuthority("SCOPE_$MCP_SCOPE")
+            // The front-end (Frontend.kt): its files and pages are public - its data comes from the API, with a token
+            it.requestMatchers(HttpMethod.GET, "/assets/**", "/favicon.ico", "/config.json").permitAll()
+            it.requestMatchers(frontendPage).permitAll()
+            // The error page of a request let in, e.g. a missing asset's 404, which would otherwise become a 401
+            it.dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
             it.anyRequest().authenticated()
         }
         // Bearer tokens only - no cookies, so no CSRF and no HTTP sessions
