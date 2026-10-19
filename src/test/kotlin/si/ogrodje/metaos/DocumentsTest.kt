@@ -8,6 +8,8 @@ import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
 import org.springframework.context.annotation.Primary
+import java.time.LocalDate
+import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
@@ -47,6 +49,7 @@ class FakeDrive : Drive {
 class DocumentsTest @Autowired constructor(
     private val drive: FakeDrive,
     private val episodesRepository: EpisodesRepository,
+    private val sessionsRepository: SessionsRepository,
     private val documentsMCP: DocumentsMCP,
     private val auditMCP: AuditMCP,
 ) {
@@ -127,19 +130,62 @@ class DocumentsTest @Autowired constructor(
         documentsMCP.link("s09e01", "https://docs.google.com/document/d/doc-s09e01-prep/edit")
         documentsMCP.link("S09E01", "doc-s09e01-notes")
         documentsMCP.link("S09E01", "doc-s09e01-notes") // already linked
-        assertEquals(listOf("S09E01 - Notes", "S09E01 - Prep"), documentsMCP.listEpisodeDocuments("S09E01").map { it.name })
+        assertEquals(listOf("S09E01 - Notes", "S09E01 - Prep"), documentsMCP.listEpisodeDocuments("S09E01").map { it.document.name })
         assertFailsWith<IllegalArgumentException> { documentsMCP.link("S09E01", "doc-elsewhere") }
 
         drive.remove("doc-s09e01-notes")
-        assertEquals(listOf("missing", "document"), documentsMCP.listEpisodeDocuments("S09E01").map { it.type })
+        assertEquals(listOf("missing", "document"), documentsMCP.listEpisodeDocuments("S09E01").map { it.document.type })
 
         documentsMCP.unlink("S09E01", "doc-s09e01-notes")
-        assertEquals(listOf("doc-s09e01-prep"), documentsMCP.listEpisodeDocuments("S09E01").map { it.id })
+        assertEquals(listOf("doc-s09e01-prep"), documentsMCP.listEpisodeDocuments("S09E01").map { it.document.id })
         assertFailsWith<IllegalArgumentException> { documentsMCP.unlink("S09E01", "doc-s09e01-notes") }
 
         val history = auditMCP.history(episode.id!!).filter { it.table == "episode_documents" }
         assertEquals(listOf("INSERT", "INSERT", "DELETE"), history.map { it.operation })
         assertEquals(ColumnChange("doc-s09e01-notes", null), history.last().changes["file_id"])
+    }
+
+    @Test
+    fun `links and unlinks docs to a recording session, and the session's history shows it`() {
+        val recordingDay = sessionsRepository.saveAndFlush(Session(LocalDate.of(2026, 10, 22), location = "Four Points", address = null))
+        val session = recordingDay.id!!
+        episodesRepository.saveAndFlush(Episode(title = "Recorded there", code = "S09E02").also { it.session = recordingDay })
+        drive.doc("doc-recording-day", "Ogrodje Snemalni Dan - 22.10.2026", parent = "folder-episodes")
+        drive.doc("doc-recording-day-en", "Ogrodje Recording Day - 22.10.2026", parent = "folder-episodes")
+        drive.doc("doc-s09e02-prep", "S09E02 - Prep", parent = "folder-episodes")
+
+        documentsMCP.linkToSession(session, "https://docs.google.com/document/d/doc-recording-day/edit")
+        documentsMCP.linkToSession(session, "doc-recording-day-en")
+        documentsMCP.linkToSession(session, "doc-recording-day-en") // already linked
+        assertEquals(
+            listOf("Ogrodje Recording Day - 22.10.2026", "Ogrodje Snemalni Dan - 22.10.2026"),
+            documentsMCP.listSessionDocuments(session).map { it.name },
+        )
+        assertFailsWith<IllegalArgumentException> { documentsMCP.linkToSession(session, "doc-elsewhere") }
+        assertFailsWith<IllegalArgumentException> { documentsMCP.linkToSession(UUID.randomUUID(), "doc-recording-day") }
+
+        // The session's docs are the episode's too, once each
+        documentsMCP.link("S09E02", "doc-s09e02-prep")
+        documentsMCP.link("S09E02", "doc-recording-day-en")
+        assertEquals(
+            listOf(
+                "Ogrodje Recording Day - 22.10.2026" to LinkedTo.EPISODE,
+                "Ogrodje Snemalni Dan - 22.10.2026" to LinkedTo.SESSION,
+                "S09E02 - Prep" to LinkedTo.EPISODE,
+            ),
+            documentsMCP.listEpisodeDocuments("S09E02").map { it.document.name to it.linkedTo },
+        )
+
+        drive.remove("doc-recording-day")
+        assertEquals(listOf("missing", "document"), documentsMCP.listSessionDocuments(session).map { it.type })
+
+        documentsMCP.unlinkFromSession(session, "doc-recording-day")
+        assertEquals(listOf("doc-recording-day-en"), documentsMCP.listSessionDocuments(session).map { it.id })
+        assertFailsWith<IllegalArgumentException> { documentsMCP.unlinkFromSession(session, "doc-recording-day") }
+
+        val history = auditMCP.history(session).filter { it.table == "session_documents" }
+        assertEquals(listOf("INSERT", "INSERT", "DELETE"), history.map { it.operation })
+        assertEquals(ColumnChange("doc-recording-day", null), history.last().changes["file_id"])
     }
 
     @Test
@@ -168,7 +214,7 @@ class DocumentsTest @Autowired constructor(
             expected.mapValues { (_, match) -> if (match.second == MatchResult.WOULD_LINK) match.first to MatchResult.LINKED else match },
             match(apply = true),
         )
-        assertEquals(listOf("doc-s08e07"), documentsMCP.listEpisodeDocuments("S08E07").map { it.id })
+        assertEquals(listOf("doc-s08e07"), documentsMCP.listEpisodeDocuments("S08E07").map { it.document.id })
         assertEquals(MatchResult.ALREADY_LINKED, match(apply = true).getValue("S08E03 - Guest: Title").second)
     }
 }

@@ -2,12 +2,18 @@ package si.ogrodje.metaos
 
 import org.springframework.ai.mcp.annotation.McpTool
 import org.springframework.ai.mcp.annotation.McpToolParam
+import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
 import java.time.OffsetDateTime
+import java.util.UUID
 
 data class DriveFileDto(val id: String, val name: String, val type: String, val url: String?, val modifiedAt: OffsetDateTime?)
 data class DocumentContentDto(val id: String, val name: String, val url: String?, val markdown: String)
+
+// An episode's docs are linked to the episode itself, or to the recording session it is in
+enum class LinkedTo { EPISODE, SESSION }
+data class EpisodeDocumentDto(val document: DriveFileDto, val linkedTo: LinkedTo)
 
 enum class MatchResult { LINKED, WOULD_LINK, ALREADY_LINKED, NO_EPISODE_CODE, NO_SUCH_EPISODE }
 data class DocumentMatchDto(val document: DriveFileDto, val episode: String?, val result: MatchResult)
@@ -51,9 +57,13 @@ class DocumentsMCP(
     private val drive: Drive,
     private val episodes: EpisodesRepository,
     private val documents: EpisodeDocumentsRepository,
+    private val sessions: SessionsRepository,
+    private val sessionDocuments: SessionDocumentsRepository,
 ) {
 
     private fun findEpisode(ref: String) = requireNotNull(episodes.findByRef(ref)) { "Episode $ref not found" }
+
+    private fun findSession(id: UUID) = requireNotNull(sessions.findByIdOrNull(id)) { "Session $id not found" }
 
     // Only what's in the Ogrodje folder, not anything else someone shares with the bot
     private fun fileInOgrodje(ref: String): DriveFile {
@@ -111,18 +121,26 @@ class DocumentsMCP(
 
     @McpTool(
         name = "list_episode_documents",
-        description = "List the Google Docs linked to an episode, by name. Docs deleted since are listed as missing"
+        description = "List the Google Docs of an episode, by name: those linked to the episode and those linked to " +
+            "its recording session, e.g. the recording day plan; linkedTo says which. Docs deleted since are listed " +
+            "as missing"
     )
-    fun listEpisodeDocuments(@McpToolParam(description = EPISODE_REF) code: String): List<DriveFileDto> =
-        documents.findByEpisode(findEpisode(code))
-            .map { drive.file(it.fileId)?.toDto() ?: missingDocument(it.fileId) }
-            .sortedBy { it.name }
+    fun listEpisodeDocuments(@McpToolParam(description = EPISODE_REF) code: String): List<EpisodeDocumentDto> {
+        val episode = findEpisode(code)
+        val ofEpisode = documents.findByEpisode(episode).map { it.fileId }
+        // A doc linked to both is the episode's
+        val ofSession = episode.session?.let(sessionDocuments::findBySession).orEmpty().map { it.fileId } - ofEpisode.toSet()
+        return (ofEpisode.map { it to LinkedTo.EPISODE } + ofSession.map { it to LinkedTo.SESSION })
+            .map { (fileId, linkedTo) -> EpisodeDocumentDto(drive.file(fileId)?.toDto() ?: missingDocument(fileId), linkedTo) }
+            .sortedBy { it.document.name }
+    }
 
     @Transactional
     @McpTool(
         name = "link_episode_document",
         description = "Link a Google Doc in Ogrodje's Google Drive folder to an episode it is about, e.g. its " +
-            "preparation doc. A doc can be linked to several episodes, e.g. the doc of a recording session"
+            "preparation doc. A doc can be linked to several episodes; the doc of a recording session goes to the " +
+            "session (link_session_document)"
     )
     fun link(
         @McpToolParam(description = EPISODE_REF) code: String,
@@ -144,6 +162,45 @@ class DocumentsMCP(
         val fileId = driveFileId(document)
         documents.delete(
             requireNotNull(documents.findByEpisodeAndFileId(episode, fileId)) { "$document isn't linked to episode ${episode.label}" }
+        )
+        return drive.file(fileId)?.toDto() ?: missingDocument(fileId)
+    }
+
+    @McpTool(
+        name = "list_session_documents",
+        description = "List the Google Docs linked to a recording session, by name. Docs deleted since are listed as missing"
+    )
+    fun listSessionDocuments(@McpToolParam(description = "Session ID") sessionId: UUID): List<DriveFileDto> =
+        sessionDocuments.findBySession(findSession(sessionId))
+            .map { drive.file(it.fileId)?.toDto() ?: missingDocument(it.fileId) }
+            .sortedBy { it.name }
+
+    @Transactional
+    @McpTool(
+        name = "link_session_document",
+        description = "Link a Google Doc in Ogrodje's Google Drive folder to a recording session it is about, e.g. " +
+            "its recording day plan (\"Ogrodje Snemalni Dan - ...\")"
+    )
+    fun linkToSession(
+        @McpToolParam(description = "Session ID") sessionId: UUID,
+        @McpToolParam(description = DOCUMENT_REF) document: String,
+    ): DriveFileDto {
+        val session = findSession(sessionId)
+        val file = document(document)
+        if (sessionDocuments.findBySessionAndFileId(session, file.id) == null) sessionDocuments.save(SessionDocument(session, file.id))
+        return file.toDto()
+    }
+
+    @Transactional
+    @McpTool(name = "unlink_session_document", description = "Unlink a Google Doc from a recording session. The doc stays in Drive")
+    fun unlinkFromSession(
+        @McpToolParam(description = "Session ID") sessionId: UUID,
+        @McpToolParam(description = DOCUMENT_REF) document: String,
+    ): DriveFileDto {
+        val session = findSession(sessionId)
+        val fileId = driveFileId(document)
+        sessionDocuments.delete(
+            requireNotNull(sessionDocuments.findBySessionAndFileId(session, fileId)) { "$document isn't linked to session $sessionId" }
         )
         return drive.file(fileId)?.toDto() ?: missingDocument(fileId)
     }

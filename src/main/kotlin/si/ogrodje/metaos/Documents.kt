@@ -32,3 +32,32 @@ interface EpisodeDocumentsRepository : JpaRepository<EpisodeDocument, UUID> {
     fun findByEpisode(episode: Episode): List<EpisodeDocument>
     fun findByEpisodeAndFileId(episode: Episode, fileId: String): EpisodeDocument?
 }
+
+/** A Google Doc in the Ogrodje folder that is about a recording session, e.g. its recording day plan */
+@Entity
+@Table(name = "session_documents")
+class SessionDocument(
+    // Eager, because Hibernate can't proxy a to-one whose target uses @SoftDelete.
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "session_id")
+    val session: Session,
+
+    // Drive file ID - unlike the title and the URL, it stays the same when the doc is renamed or moved
+    @Column(nullable = false, columnDefinition = "text")
+    val fileId: String,
+) {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    var id: UUID? = null
+        protected set
+
+    override fun equals(other: Any?) = this === other || (other is SessionDocument && id != null && id == other.id)
+    override fun hashCode() = javaClass.hashCode()
+    override fun toString() = "SessionDocument(id=$id, fileId=$fileId)"
+}
+
+interface SessionDocumentsRepository : JpaRepository<SessionDocument, UUID> {
+    fun findBySession(session: Session): List<SessionDocument>
+    fun findBySessionAndFileId(session: Session, fileId: String): SessionDocument?
+}

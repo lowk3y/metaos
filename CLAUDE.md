@@ -54,8 +54,8 @@ Drive and Gmail have a refresh token each, from [`google/refresh_token.sh`](goog
 Google revokes tokens with Gmail access when the account's password changes, and that shouldn't take Drive down too.
 
 - **Drive** ([`Drive.kt`](src/main/kotlin/si/ogrodje/metaos/Drive.kt)): Ogrodje's folder is shared with the bot.
-  `DocumentsMCP` has the tools and only touches what's inside the folder; docs are linked to episodes by Drive file ID
-  (`episode_documents`).
+  `DocumentsMCP` has the tools and only touches what's inside the folder; docs are linked to episodes and recording
+  sessions by Drive file ID (`episode_documents`, `session_documents`).
 - **Gmail** ([`Gmail.kt`](src/main/kotlin/si/ogrodje/metaos/Gmail.kt)): the bot's mailbox - search, threads, drafts,
   sending. Not exposed as MCP tools.
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_DRIVE_REFRESH_TOKEN`, `METAOS_DRIVE_ROOT_FOLDER_ID` and

@@ -55,8 +55,8 @@ class AuditMCP(
         name = "get_history",
         description = "List every change to an episode, person, session or show, oldest first: what changed, when, " +
             "by whom, through which MCP client and tool. Includes people's roles on an episode, the documents " +
-            "linked to it and episodes moving in and out of a session or show. Soft deletes show up as updates " +
-            "that set deleted_at"
+            "linked to an episode or session and episodes moving in and out of a session or show. Soft deletes show " +
+            "up as updates that set deleted_at"
     )
     fun history(@McpToolParam(description = "ID of the episode, person, session or show") id: UUID): List<ChangeDto> =
         jdbcTemplate.query(
@@ -65,6 +65,7 @@ class AuditMCP(
             where row_id = ?
                or (table_name in ('episode_people', 'episode_documents')
                    and ? in (old_row ->> 'episode_id', new_row ->> 'episode_id', old_row ->> 'person_id', new_row ->> 'person_id'))
+               or (table_name = 'session_documents' and ? in (old_row ->> 'session_id', new_row ->> 'session_id'))
                or (table_name = 'episodes'
                    and ((old_row ->> 'session_id' is distinct from new_row ->> 'session_id'
                          and ? in (old_row ->> 'session_id', new_row ->> 'session_id'))
@@ -72,7 +73,7 @@ class AuditMCP(
                          and ? in (old_row ->> 'show_id', new_row ->> 'show_id'))))
             order by id
             """.trimIndent(),
-            toChange, id, id.toString(), id.toString(), id.toString(),
+            toChange, id, id.toString(), id.toString(), id.toString(), id.toString(),
         )
 
     @McpTool(name = "list_recent_changes", description = "List the latest changes to all data, newest first")
