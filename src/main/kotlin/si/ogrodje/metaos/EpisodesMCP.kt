@@ -59,7 +59,7 @@ private fun Episode.toDetailsDto() = EpisodeDetailsDto(
 )
 
 // For messages: ideas may not have a code yet
-private val Episode.label get() = code ?: "\"$title\""
+val Episode.label get() = code ?: "\"$title\""
 
 private fun Person.onEpisode(assignments: List<EpisodePerson>) =
     EpisodePersonDto(id, name, email, assignments.map { it.role }.sorted())

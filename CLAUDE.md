@@ -46,6 +46,27 @@ that started it; writes made any other way (psql, migrations) are logged without
 
 A new table needs its own `<table>_audit` trigger, and `get_history` needs to know about new link columns.
 
+### Google (Drive and Gmail)
+
+MetaOS uses Google as a bot account, `iva.ogrodje@gmail.com`, through the "Desktop app" OAuth client "MetaOS" of
+Google Cloud project `ogrodje-metaos` and Google's Java client libraries ([`Google.kt`](src/main/kotlin/si/ogrodje/metaos/Google.kt)).
+Drive and Gmail have a refresh token each, from [`google/refresh_token.sh`](google/refresh_token.sh) `[drive|gmail]`:
+Google revokes tokens with Gmail access when the account's password changes, and that shouldn't take Drive down too.
+
+- **Drive** ([`Drive.kt`](src/main/kotlin/si/ogrodje/metaos/Drive.kt)): Ogrodje's folder is shared with the bot.
+  `DocumentsMCP` has the tools and only touches what's inside the folder; docs are linked to episodes by Drive file ID
+  (`episode_documents`).
+- **Gmail** ([`Gmail.kt`](src/main/kotlin/si/ogrodje/metaos/Gmail.kt)): the bot's mailbox - search, threads, drafts,
+  sending. Not exposed as MCP tools.
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_DRIVE_REFRESH_TOKEN`, `METAOS_DRIVE_ROOT_FOLDER_ID` and
+  `GOOGLE_GMAIL_REFRESH_TOKEN` (`.envrc`) turn them on; each is off without its refresh token. In production they come
+  from `metaos-secret` (`k8s/set_secrets.sh`) and `metaos-config`.
+- The refresh tokens don't expire with time. The `drive` and `gmail` health checks use them every hour, as Google
+  drops tokens that go unused for six months, and report a revoked one there, in `metaos_<drive|gmail>_connected` and
+  in the log.
+- `GoogleDriveTest` and `GmailTest` run against the real account when its credentials are in the environment; Gmail's
+  only makes and deletes a draft.
+
 ### Deployment
 
 Production runs on the ogrodje-one Kubernetes cluster, namespace `metaos-prod`: the app at `https://metaos.ogrodje.si`

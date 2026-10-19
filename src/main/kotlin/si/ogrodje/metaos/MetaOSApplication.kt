@@ -10,9 +10,11 @@ import org.springframework.boot.runApplication
 import org.springframework.context.ApplicationContext
 import org.springframework.context.annotation.Bean
 import org.springframework.core.env.Environment
+import org.springframework.scheduling.annotation.EnableScheduling
 
 
 @SpringBootApplication
+@EnableScheduling
 // @EnableConfigurationProperties(MetaOSProperties::class)
 class MetaOSApplication(
     private val environment: Environment

@@ -9,6 +9,8 @@
 #   PROD_KEYCLOAK_ADMIN_PASSWORD  Keycloak's bootstrap admin ("admin")
 #   PROD_KEYCLOAK_DEV_PASSWORD    the realm's "dev" user from metaos-realm.json
 #   DOCKER_REGISTRY_USERNAME, DOCKER_REGISTRY_PASSWORD
+#   GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_DRIVE_REFRESH_TOKEN  the Google bot account's, as locally
+#   GOOGLE_GMAIL_REFRESH_TOKEN    optional, Gmail stays off without it (google/refresh_token.sh)
 # The DB passwords go into SQL literals, so keep them alphanumeric: `openssl rand -hex 24`.
 set -euo pipefail
 
@@ -18,6 +20,7 @@ REGISTRY=registry.folk-decibel.ts.net
 : "${PROD_METAOS_DB_PASSWORD:?}" "${PROD_KEYCLOAK_DB_PASSWORD:?}"
 : "${PROD_KEYCLOAK_ADMIN_PASSWORD:?}" "${PROD_KEYCLOAK_DEV_PASSWORD:?}"
 : "${DOCKER_REGISTRY_USERNAME:?}" "${DOCKER_REGISTRY_PASSWORD:?}"
+: "${GOOGLE_CLIENT_ID:?}" "${GOOGLE_CLIENT_SECRET:?}" "${GOOGLE_DRIVE_REFRESH_TOKEN:?}"
 
 cd "$(dirname "$0")"
 kubectl apply -f base/namespace.yaml
@@ -38,6 +41,10 @@ SQL
 
 kubectl create secret generic metaos-secret -n "$NS" \
   --from-literal=postgres_password="$PROD_METAOS_DB_PASSWORD" \
+  --from-literal=google_client_id="$GOOGLE_CLIENT_ID" \
+  --from-literal=google_client_secret="$GOOGLE_CLIENT_SECRET" \
+  --from-literal=google_drive_refresh_token="$GOOGLE_DRIVE_REFRESH_TOKEN" \
+  --from-literal=google_gmail_refresh_token="${GOOGLE_GMAIL_REFRESH_TOKEN:-}" \
   --dry-run=client -o yaml | kubectl apply -f -
 
 kubectl create secret generic keycloak-secret -n "$NS" \

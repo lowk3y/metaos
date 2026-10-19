@@ -62,6 +62,11 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-flyway")
     implementation("org.flywaydb:flyway-database-postgresql")
     runtimeOnly("org.postgresql:postgresql")
+
+    // Google Drive and Gmail, as Ogrodje's bot account (Google.kt)
+    implementation("com.google.auth:google-auth-library-oauth2-http:1.54.0")
+    implementation("com.google.apis:google-api-services-drive:v3-rev20261011-2.0.0")
+    implementation("com.google.apis:google-api-services-gmail:v1-rev20261005-2.0.0")
 }
 
 dependencyManagement {
