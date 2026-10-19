@@ -11,6 +11,11 @@ version = "0.0.1"
 
 repositories {
     mavenCentral()
+    // Koofr's Java SDK isn't on Maven Central; JitPack builds it from its GitHub release tag
+    exclusiveContent {
+        forRepository { maven("https://jitpack.io") }
+        filter { includeGroup("com.github.koofr") }
+    }
 }
 
 dependencyManagement {
@@ -67,6 +72,9 @@ dependencies {
     implementation("com.google.auth:google-auth-library-oauth2-http:1.54.0")
     implementation("com.google.apis:google-api-services-drive:v3-rev20261011-2.0.0")
     implementation("com.google.apis:google-api-services-gmail:v1-rev20261005-2.0.0")
+
+    // Koofr, as Ogrodje's bot account (Koofr.kt)
+    implementation("com.github.koofr:java-koofr:3.8.10")
 }
 
 dependencyManagement {

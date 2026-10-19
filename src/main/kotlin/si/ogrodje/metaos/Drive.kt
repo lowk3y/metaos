@@ -133,7 +133,7 @@ class GoogleDrive(
 
 @Component
 @ConditionalOnDrive
-class DriveHealthIndicator(private val drive: Drive, registry: MeterRegistry) : GoogleHealthIndicator("drive", registry) {
+class DriveHealthIndicator(private val drive: Drive, registry: MeterRegistry) : ConnectionHealthIndicator("drive", registry) {
     override fun probe() = "folder" to (drive.file(drive.rootFolderId)?.name
         ?: error("${drive.rootFolderId} is gone or not shared with the bot"))
 }

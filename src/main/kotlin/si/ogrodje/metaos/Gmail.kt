@@ -126,7 +126,7 @@ class GoogleMailbox(
 
 @Component
 @ConditionalOnGmail
-class GmailHealthIndicator(private val mailbox: Mailbox, registry: MeterRegistry) : GoogleHealthIndicator("gmail", registry) {
+class GmailHealthIndicator(private val mailbox: Mailbox, registry: MeterRegistry) : ConnectionHealthIndicator("gmail", registry) {
     override fun probe() = "address" to mailbox.address()
 }
 

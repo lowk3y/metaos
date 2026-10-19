@@ -67,6 +67,19 @@ Google revokes tokens with Gmail access when the account's password changes, and
 - `GoogleDriveTest` and `GmailTest` run against the real account when its credentials are in the environment; Gmail's
   only makes and deletes a draft.
 
+### Koofr
+
+MetaOS also uses the bot account in Koofr ([`Koofr.kt`](src/main/kotlin/si/ogrodje/metaos/Koofr.kt)), through
+Koofr's Java SDK (from JitPack, as it isn't on Maven Central). It works only in the folders other Koofr users share with
+the bot; `KoofrMCP` lists, searches and reads them, uploads, creates folders and moves or renames, but never deletes or
+replaces anything unasked.
+
+- `KOOFR_EMAIL` and `KOOFR_APP_PASSWORD` (`.envrc`) turn it on; it's off without the app password, which is made at
+  https://app.koofr.net/app/admin/preferences/password while signed in as the bot. In production the email is in
+  `metaos-config` and the app password in `metaos-secret` (`k8s/set_secrets.sh`).
+- The `koofr` health check uses it every hour and reports a rejected password there, in `metaos_koofr_connected` and in
+  the log. `KoofrTest` runs against the real account (read-only) when the app password is in the environment.
+
 ### Deployment
 
 Production runs on the ogrodje-one Kubernetes cluster, namespace `metaos-prod`: the app at `https://metaos.ogrodje.si`
