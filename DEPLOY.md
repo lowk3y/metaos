@@ -119,6 +119,28 @@ justfile                     the same steps by hand: just push, just deploy, jus
   audience mapper keeps the old value until it's edited there.
 - **Every deploy rolls Keycloak**, since both images get the same tag. It's a rolling update, so the old pod serves
   until the new one is ready.
+- **Imported built-in clients have no client scopes.** Because `metaos-realm.json` lists its client scopes, the import
+  leaves Keycloak's own clients (account console, admin console, ...) without `roles`, `profile`, `email`, ... Their
+  tokens carry no roles, so the account console fails with "Something went wrong" (a 403 from the account API). MCP
+  clients aren't affected: DCR gives them the realm's default scopes. Run
+  [`keycloak/fix_builtin_clients.sh`](keycloak/fix_builtin_clients.sh) once after a fresh import.
+
+## Discord login
+
+[`keycloak/discord_idp.sh`](keycloak/discord_idp.sh) adds "Sign in with Discord" to realm `metaos` through the admin
+API. It's not in the realm JSON, because the realm is imported only once and the client secret doesn't belong in git.
+
+- **Generic OAuth v2 provider.** Keycloak has no Discord provider; the generic one reads `id`, `username`,
+  `global_name` and `email` from `https://discord.com/api/users/@me`. The community keycloak-discord extension could
+  restrict logins to a Discord server, but it targets Keycloak 26.0 and server membership isn't a fine enough gate.
+- **Approval gate.** Every realm user may use every MCP tool, so the post-login flow `discord-post-login` denies Discord
+  logins until the user has the realm role `metaos-user`. A first login creates the user and is denied; an admin
+  approves them by granting the role. Password users that an admin creates aren't affected.
+- **Emails aren't trusted.** Discord also returns unverified emails, and a verified email links a login to a Person.
+  When approving someone, also turn on *Email verified* once you know the address is theirs.
+- Verified on a throwaway Keycloak 26.8.1, with a second realm standing in for Discord: denied without the role,
+  allowed with it, denied again once it's removed; password logins unaffected; the Discord button redirects to
+  `discord.com/oauth2/authorize` with scope `identify email`.
 
 ## Next steps
 
