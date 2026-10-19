@@ -55,8 +55,16 @@ class FrontendConfig : WebMvcConfigurer {
 
     private class PageResolver : PathResourceResolver() {
         override fun getResource(resourcePath: String, location: Resource): Resource? =
-            super.getResource(resourcePath, location)
-                ?: if ('.' in resourcePath.substringAfterLast('/')) null else super.getResource("index.html", location)
+            super.getResource(resourcePath, location) ?: when {
+                '.' in resourcePath.substringAfterLast('/') -> null
+                resourcePath.substringBefore('/') in SERVER_PATHS -> null
+                else -> super.getResource("index.html", location)
+            }
+    }
+
+    private companion object {
+        // MetaOS's own paths are never pages, e.g. /actuator/prometheus in k8s, where actuator is on another port
+        val SERVER_PATHS = setOf("actuator", "mcp", "graphql", ".well-known")
     }
 }
 

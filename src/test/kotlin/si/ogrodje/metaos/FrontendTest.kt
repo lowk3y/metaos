@@ -52,6 +52,13 @@ class FrontendTest @Autowired constructor(private val mvc: MockMvc) {
     }
 
     @Test
+    fun `keeps MetaOS's own paths out of the front-end`() {
+        listOf("/actuator/missing", "/.well-known/missing").forEach { path ->
+            mvc.get(path) { accept(MediaType.TEXT_HTML) }.andExpect { status { isNotFound() } }
+        }
+    }
+
+    @Test
     fun `wants a token for anything that isn't a page`() {
         mvc.get("/episodes/S05E08") { accept(MediaType.APPLICATION_JSON) }.andExpect { status { isUnauthorized() } }
         mvc.get("/mcp") { accept(MediaType.TEXT_HTML) }.andExpect { status { isUnauthorized() } }
