@@ -119,11 +119,13 @@ justfile                     the same steps by hand: just push, just deploy, jus
   audience mapper keeps the old value until it's edited there.
 - **Every deploy rolls Keycloak**, since both images get the same tag. It's a rolling update, so the old pod serves
   until the new one is ready.
-- **Imported built-in clients have no client scopes.** Because `metaos-realm.json` lists its client scopes, the import
-  leaves Keycloak's own clients (account console, admin console, ...) without `roles`, `profile`, `email`, ... Their
-  tokens carry no roles, so the account console fails with "Something went wrong" (a 403 from the account API). MCP
-  clients aren't affected: DCR gives them the realm's default scopes. Run
-  [`keycloak/fix_builtin_clients.sh`](keycloak/fix_builtin_clients.sh) once after a fresh import.
+- **Realms imported from the older realm file lack built-in client scopes.** An import that lists client scopes leaves
+  Keycloak's own clients (account console, admin console, ...) without `roles`, `profile`, `email`, ..., so their
+  tokens carry no roles and the account console fails with "Something went wrong" (a 403 from the account API).
+  `metaos-realm.json` now lists only `mcp:tools` and sets the realm attribute `CreateDefaultClientScopes`, which makes
+  the import create Keycloak's standard scopes and assign them as in a fresh realm. A realm imported from the file
+  before that change - production, and local databases from before - needs
+  [`keycloak/fix_builtin_clients.sh`](keycloak/fix_builtin_clients.sh) once; production has had it.
 
 ## Discord login
 

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Gives realm metaos's built-in clients (account console, admin console, ...) the client scopes a fresh realm gives them.
 #
-# metaos-realm.json lists its client scopes, and an import that does that leaves Keycloak's own clients without any
-# (DEPLOY.md, "Known trade-offs"). Their tokens then carry no roles: the account console at /realms/metaos/account
-# fails with "Something went wrong" (403 from the account API). Clients that register through DCR aren't affected,
-# they get the realm's default scopes. Run this once after a fresh import; it's idempotent.
+# Only for realms imported from metaos-realm.json before it set CreateDefaultClientScopes (DEPLOY.md, "Known
+# trade-offs"): that import left Keycloak's own clients without any client scopes, so their tokens carry no roles and
+# the account console at /realms/metaos/account fails with "Something went wrong" (403 from the account API). Clients
+# that register through DCR aren't affected. Imports of the current file don't need this; it's idempotent either way.
 #
 # From the environment:
 #   KEYCLOAK_URL                                      defaults to https://metaos-auth.ogrodje.si
