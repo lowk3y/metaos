@@ -41,7 +41,12 @@ yarn build      # type-check (vue-tsc) and build into fe/dist
   [`fe/src/tools.ts`](fe/src/tools.ts), which has to follow every change to the tools (see above).
 - Data comes from the GraphQL API at `/graphql` ([`schema.graphqls`](src/main/resources/graphql/schema.graphqls),
   [`GraphQL.kt`](src/main/kotlin/si/ogrodje/metaos/GraphQL.kt)), through `fe/src/graphql.ts`. It's open to anyone, as
-  some of it is public (`releasedEpisodes`); a bearer token says who is asking (`me`).
+  some of it is public (`releasedEpisodes`); a bearer token says who is asking (`me`). What isn't public needs
+  `metaos:read`: whole queries with `@PreAuthorize`, and fields that public episodes and sessions also have (history,
+  docs, addresses, ...) come back empty for anyone else.
+- Signed in, episode titles and session labels lead to their pages, `/episodes/<code or ID>` and `/sessions/<ID>`:
+  everything about them, and their history on a date rail (`HistoryTimeline.vue`), from the audit trail as
+  [`History.kt`](src/main/kotlin/si/ogrodje/metaos/History.kt) tells it.
 - Users sign in with keycloak-js (`fe/src/stores/auth.ts`), straight to Discord or Google (`idpHint`). On load it
   checks for a Keycloak session in a hidden iframe of `fe/public/silent-check-sso.html`, which is why MetaOS's pages
   may be framed by MetaOS itself (`X-Frame-Options: SAMEORIGIN`).
@@ -84,10 +89,12 @@ docker compose up -d keycloak   # http://localhost:8180 (admin console: admin / 
 Postgres triggers ([`V6__audit_log.sql`](src/main/resources/db/migration/V6__audit_log.sql)) write every insert, update
 and delete on the domain tables to `audit_log`, with the old and new row as JSON. `AuditingTransactionManager` tags each
 read-write transaction with the signed-in user (`sub`, `preferred_username`), their OAuth client (`azp`) and the MCP tool
-that started it; writes made any other way (psql, migrations) are logged without them. The `get_history` and
-`list_recent_changes` MCP tools read it.
+that started it; writes made any other way (psql, migrations) are logged without them. `AuditLog` reads it, for the
+`get_history` and `list_recent_changes` MCP tools and for the history on the front-end's episode and session pages
+(`History.kt`, which says each change in words).
 
-A new table needs its own `<table>_audit` trigger, and `get_history` needs to know about new link columns.
+A new table needs its own `<table>_audit` trigger, `AuditLog.history` needs to know about new link columns, and
+`History.kt` how to say what a change to it means.
 
 ### Google (Drive and Gmail)
 

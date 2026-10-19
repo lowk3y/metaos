@@ -14,6 +14,12 @@ type Query {
     "Recorded episodes that aren't public yet, the earliest recorded first. Needs a signed-in user."
     inProduction: [Episode!]!
 
+    "An episode by its code (e.g. S05E08) or ID; null if there's none. Needs a signed-in user."
+    episode(ref: String!): Episode
+
+    "A recording session by its ID; null if there's none. Needs a signed-in user."
+    session(id: ID!): Session
+
     "The signed-in user, from the bearer token; null without one"
     me: CurrentUser
 }
@@ -42,6 +48,44 @@ type Episode {
     people: [EpisodePerson!]!
     "Google Docs about the episode, e.g. its preparation doc, the first linked first. None without a signed-in user."
     documents: [Document!]!
+    "When it was added to MetaOS, e.g. 2026-10-19"
+    addedDate: String!
+    "AI-generated summary of the episode, in Markdown. Null without a signed-in user."
+    machineSummary: String
+    "Koofr folders about the episode, e.g. its recordings. None without a signed-in user."
+    koofrFolders: [KoofrFolder!]!
+    "Every change to the episode and to what's linked to it, oldest first. None without a signed-in user."
+    history: [Change!]!
+}
+
+"A folder in Koofr that's shared with Ogrodje's bot: a place (a shared folder), named when Koofr answers, and a path in it"
+type KoofrFolder {
+    place: String!
+    placeName: String
+    path: String!
+}
+
+"A change from the audit log, told as what happened"
+type Change {
+    "When, e.g. 2026-10-19T21:30:12.345+02:00"
+    at: String!
+    "Who made it: their username, when they were signed in"
+    actor: String
+    "The OAuth client it came through, e.g. an MCP client's ID"
+    client: String
+    "The MCP tool that made it"
+    tool: String
+    "What happened, e.g. Added Jure Čuhalev as host"
+    summary: String!
+    "The fields that changed, by their names"
+    fields: [FieldChange!]!
+}
+
+"One field of a change. From and to are null when there's nothing short to show, e.g. for a summary."
+type FieldChange {
+    field: String!
+    from: String
+    to: String
 }
 
 "A Google Doc in Ogrodje's Drive folder"
@@ -58,6 +102,14 @@ type Session {
     location: String
     "Google Docs about the session, e.g. its recording day plan, the first linked first. None without a signed-in user."
     documents: [Document!]!
+    "Street address of the location. Null without a signed-in user."
+    address: String
+    "Its episodes, by code. None without a signed-in user."
+    episodes: [Episode!]!
+    "Koofr folders about the session, e.g. everything recorded that day. None without a signed-in user."
+    koofrFolders: [KoofrFolder!]!
+    "Every change to the session, to what's linked to it and to which episodes are in it, oldest first. None without a signed-in user."
+    history: [Change!]!
 }
 
 "Where an episode is in its lifecycle"

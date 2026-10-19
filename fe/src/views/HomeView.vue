@@ -1,13 +1,11 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
-import { faDiscord, faGoogle } from '@fortawesome/free-brands-svg-icons'
-import { faArrowRight } from '@fortawesome/free-solid-svg-icons'
-import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
 import DocLinks from '@/components/DocLinks.vue'
 import EpisodeItem from '@/components/EpisodeItem.vue'
-import { bySession, type Episode, EPISODE_FIELDS, formatDate, type SessionGroup } from '@/episodes'
-import { graphql } from '@/graphql'
+import SignInPrompt from '@/components/SignInPrompt.vue'
+import { bySession, type Episode, EPISODE_FIELDS, formatDate, sessionPath, type SessionGroup } from '@/episodes'
+import { errorMessage, graphql } from '@/graphql'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -36,10 +34,6 @@ const sections = computed(() =>
     groups?.length ? [{ id, title, groups, count: groups.reduce((n, group) => n + group.episodes.length, 0) }] : []),
 )
 
-function message(error: unknown) {
-  return error instanceof Error ? error.message : String(error)
-}
-
 // The lists load again when the user signs in or out, as signed in they have more in them, e.g. docs. Only the
 // latest load counts: an earlier one may answer after it.
 let loads = 0
@@ -53,7 +47,7 @@ async function loadReleased(load: number) {
     released.value = data.releasedEpisodes
     releasedError.value = undefined
   } catch (error) {
-    if (load === loads) releasedError.value = message(error)
+    if (load === loads) releasedError.value = errorMessage(error)
   }
 }
 
@@ -67,7 +61,7 @@ async function loadMaking(load: number) {
     upcoming.value = bySession(data.upcomingRecordings)
     inProduction.value = bySession(data.inProduction)
   } catch (error) {
-    if (load === loads) makingError.value = message(error)
+    if (load === loads) makingError.value = errorMessage(error)
   }
 }
 
@@ -82,25 +76,12 @@ watch(() => auth.authenticated, (authenticated) => {
 </script>
 
 <template>
-  <main>
+  <main class="content">
     <!-- For visitors who aren't signed in: how to get at the rest -->
-    <section v-if="auth.ready && !auth.authenticated" class="welcome" aria-labelledby="sign-in">
-      <h2 id="sign-in">Sign in to use MetaOS</h2>
-      <p>
-        Sign in with Discord or Google to see the episodes in production and the upcoming recordings. Or use MetaOS
-        from your AI assistant over MCP: Usage shows how to connect it.
-      </p>
-      <div class="actions">
-        <button type="button" class="button" @click="auth.login('discord')">
-          <FontAwesomeIcon :icon="faDiscord"/>Sign in with Discord
-        </button>
-        <button type="button" class="button" @click="auth.login('google')">
-          <FontAwesomeIcon :icon="faGoogle"/>Sign in with Google
-        </button>
-        <RouterLink class="button" to="/usage">Usage with MCP<FontAwesomeIcon :icon="faArrowRight"/></RouterLink>
-      </div>
-      <p class="approval">New accounts get in once an admin has approved them.</p>
-    </section>
+    <SignInPrompt v-if="auth.ready && !auth.authenticated" title="Sign in to use MetaOS">
+      Sign in with Discord or Google to see the episodes in production and the upcoming recordings. Or use MetaOS from
+      your AI assistant over MCP: Usage shows how to connect it.
+    </SignInPrompt>
 
     <section aria-labelledby="latest-releases">
       <div class="heading">
@@ -124,8 +105,10 @@ watch(() => auth.authenticated, (authenticated) => {
         <!-- Episodes without a session are listed as they are, without a heading -->
         <div v-for="group in section.groups" :key="group.key" class="group">
           <h3 v-if="group.session" class="session">
-            <time :datetime="group.session.date">{{ formatDate(group.session.date) }}</time>
-            <span v-if="group.session.location" class="location">{{ group.session.location }}</span>
+            <RouterLink :to="sessionPath(group.session)">
+              <time :datetime="group.session.date">{{ formatDate(group.session.date) }}</time>
+              <span v-if="group.session.location" class="location">{{ group.session.location }}</span>
+            </RouterLink>
             <DocLinks :documents="group.session.documents"/>
           </h3>
           <ul class="episodes">
@@ -138,72 +121,7 @@ watch(() => auth.authenticated, (authenticated) => {
 </template>
 
 <style scoped lang="scss">
-
-main {
-  max-width: var(--content-width);
-  margin: 0 auto;
-  padding: 48px 24px 96px;
-  display: flex;
-  flex-direction: column;
-  gap: 56px;
-}
-
-.welcome {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 24px;
-  border: 1px solid var(--hairline);
-  border-radius: 12px;
-
-  h2 {
-    font-size: 15px;
-    line-height: 24px;
-    font-weight: 600;
-  }
-
-  p {
-    max-width: 640px;
-    color: var(--secondary);
-  }
-
-  .actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 8px;
-  }
-
-  .approval {
-    font-size: 13px;
-    line-height: 20px;
-    color: var(--muted);
-  }
-}
-
-.heading {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding-bottom: 12px;
-
-  h2 {
-    font-size: 15px;
-    line-height: 24px;
-    font-weight: 600;
-  }
-}
-
-.count, .note {
-  font-size: 13px;
-  line-height: 20px;
-  color: var(--muted);
-}
-
-.episodes {
-  padding: 0;
-  list-style: none;
-}
+@use '../assets/page';
 
 .session {
   display: flex;
@@ -214,6 +132,11 @@ main {
   font-size: 13px;
   line-height: 20px;
   font-weight: 600;
+
+  a {
+    display: flex;
+    gap: 8px;
+  }
 
   .location {
     font-weight: 400;

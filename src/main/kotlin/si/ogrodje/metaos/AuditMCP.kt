@@ -23,27 +23,46 @@ data class ChangeDto(
     val tool: String?,
 )
 
+/** One row of audit_log: a row inserted, updated or deleted, as it was before and after (empty for none) */
+data class AuditRow(
+    val at: OffsetDateTime,
+    val table: String,
+    val rowId: UUID,
+    val operation: String,
+    val old: Map<String, Any?>,
+    val new: Map<String, Any?>,
+    val actor: String?,
+    val actorId: String?,
+    val client: String?,
+    val tool: String?,
+)
+
 // Columns that change with every row and say nothing about what happened to it
 private val BOOKKEEPING_COLUMNS = setOf("id", "created_at", "updated_at")
 
-private fun diff(old: Map<String, Any?>, new: Map<String, Any?>): Map<String, ColumnChange> =
+/** The columns that differ between a row's old and new values */
+fun AuditRow.diff(): Map<String, ColumnChange> =
     (old.keys + new.keys).filter { it !in BOOKKEEPING_COLUMNS && old[it] != new[it] }
         .associateWith { ColumnChange(old[it], new[it]) }
 
+private fun AuditRow.toDto() = ChangeDto(at, table, rowId, operation, diff(), actor, actorId, client, tool)
+
+/** The audit trail (V6__audit_log.sql), for get_history and for the front-end's history (History.kt) */
 @Component
-class AuditMCP(
+class AuditLog(
     private val jdbcTemplate: JdbcTemplate,
     private val jsonMapper: JsonMapper,
 ) {
 
-    private val toChange = RowMapper { rs, _ ->
+    private val toRow = RowMapper { rs, _ ->
         fun row(column: String) = rs.getString(column)?.let { jsonMapper.readValue<Map<String, Any?>>(it) }.orEmpty()
-        ChangeDto(
+        AuditRow(
             at = rs.getObject("changed_at", OffsetDateTime::class.java),
             table = rs.getString("table_name"),
             rowId = rs.getObject("row_id", UUID::class.java),
             operation = rs.getString("operation"),
-            changes = diff(row("old_row"), row("new_row")),
+            old = row("old_row"),
+            new = row("new_row"),
             actor = rs.getString("actor"),
             actorId = rs.getString("actor_id"),
             client = rs.getString("client"),
@@ -51,14 +70,11 @@ class AuditMCP(
         )
     }
 
-    @McpTool(
-        name = "get_history",
-        description = "List every change to an episode, person, session or show, oldest first: what changed, when, " +
-            "by whom, through which MCP client and tool. Includes people's roles on an episode, the documents and " +
-            "Koofr folders linked to an episode or session and episodes moving in and out of a session or show. Soft " +
-            "deletes show up as updates that set deleted_at"
-    )
-    fun history(@McpToolParam(description = "ID of the episode, person, session or show") id: UUID): List<ChangeDto> =
+    /**
+     * Every change to an episode, person, session or show, oldest first, with people's roles on an episode, the
+     * documents and Koofr folders linked to an episode or session, and episodes moving in and out of a session or show
+     */
+    fun history(id: UUID): List<AuditRow> =
         jdbcTemplate.query(
             """
             select * from audit_log
@@ -74,12 +90,28 @@ class AuditMCP(
                          and ? in (old_row ->> 'show_id', new_row ->> 'show_id'))))
             order by id
             """.trimIndent(),
-            toChange, id, id.toString(), id.toString(), id.toString(), id.toString(),
+            toRow, id, id.toString(), id.toString(), id.toString(), id.toString(),
         )
+
+    fun recent(limit: Int): List<AuditRow> =
+        jdbcTemplate.query("select * from audit_log order by id desc limit ?", toRow, limit)
+}
+
+@Component
+class AuditMCP(private val auditLog: AuditLog) {
+
+    @McpTool(
+        name = "get_history",
+        description = "List every change to an episode, person, session or show, oldest first: what changed, when, " +
+            "by whom, through which MCP client and tool. Includes people's roles on an episode, the documents and " +
+            "Koofr folders linked to an episode or session and episodes moving in and out of a session or show. Soft " +
+            "deletes show up as updates that set deleted_at"
+    )
+    fun history(@McpToolParam(description = "ID of the episode, person, session or show") id: UUID): List<ChangeDto> =
+        auditLog.history(id).map { it.toDto() }
 
     @McpTool(name = "list_recent_changes", description = "List the latest changes to all data, newest first")
     fun recentChanges(
         @McpToolParam(description = "How many changes to list, 20 by default", required = false) limit: Int?,
-    ): List<ChangeDto> =
-        jdbcTemplate.query("select * from audit_log order by id desc limit ?", toChange, (limit ?: 20).coerceIn(1, 200))
+    ): List<ChangeDto> = auditLog.recent((limit ?: 20).coerceIn(1, 200)).map { it.toDto() }
 }

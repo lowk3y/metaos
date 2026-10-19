@@ -1,19 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { IconDefinition } from '@fortawesome/fontawesome-svg-core'
-import { faPatreon, faSpotify, faYoutube } from '@fortawesome/free-brands-svg-icons'
-import { faPodcast } from '@fortawesome/free-solid-svg-icons'
+import { RouterLink } from 'vue-router'
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
 import DocLinks from '@/components/DocLinks.vue'
-import { type Episode, formatDate, links, type Platform, roleName, statusName } from '@/episodes'
+import { brands } from '@/brands'
+import { type Episode, episodePath, formatDate, links, roleName, statusName } from '@/episodes'
+import { useAuthStore } from '@/stores/auth'
 
-// In their brand colours. Font Awesome has no Apple Podcasts logo; its podcast icon looks much like it.
-const brands: Record<Platform, { icon: IconDefinition, color: string }> = {
-  YouTube: { icon: faYoutube, color: '#FF0000' },
-  Spotify: { icon: faSpotify, color: '#1DB954' },
-  'Apple Podcasts': { icon: faPodcast, color: '#9933CC' },
-  Patreon: { icon: faPatreon, color: '#FF424D' },
-}
+// Signed in, the title leads to the episode's page
+const auth = useAuthStore()
 
 const props = defineProps<{
   episode: Episode
@@ -34,7 +29,10 @@ const date = computed(() => {
   <li class="episode">
     <span class="code" :aria-hidden="!episode.code">{{ episode.code ?? '—' }}</span>
     <div class="main">
-      <p class="title" lang="sl">{{ episode.title }}</p>
+      <p class="title" lang="sl">
+        <RouterLink v-if="auth.authenticated" :to="episodePath(episode)">{{ episode.title }}</RouterLink>
+        <template v-else>{{ episode.title }}</template>
+      </p>
       <p v-if="date || episode.people.length" class="details">
         <time v-if="date" :datetime="date">{{ formatDate(date) }}</time>
         <span v-if="date && episode.people.length" aria-hidden="true"> · </span>

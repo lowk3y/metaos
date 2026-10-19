@@ -3,7 +3,9 @@ package si.ogrodje.metaos
 import graphql.GraphQLError
 import graphql.GraphqlErrorBuilder
 import graphql.schema.DataFetchingEnvironment
+import org.springframework.beans.factory.ObjectProvider
 import org.springframework.data.domain.PageRequest
+import org.springframework.data.repository.findByIdOrNull
 import org.springframework.graphql.data.method.annotation.Argument
 import org.springframework.graphql.data.method.annotation.BatchMapping
 import org.springframework.graphql.data.method.annotation.QueryMapping
@@ -15,6 +17,7 @@ import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.stereotype.Component
 import org.springframework.stereotype.Controller
 import java.time.LocalDate
+import java.util.UUID
 
 /*
  * GraphQL at /graphql (resources/graphql/schema.graphqls), for the front-end. It's open to anyone, as some of it is
@@ -90,6 +93,65 @@ class DocumentsGraphQL(
     fun sessionDocuments(sessions: List<Session>): Map<Session, List<DocumentLinkDto>> {
         val bySession = if (signedIn()) sessionDocuments.findBySessionIds(sessions.mapNotNull { it.id }).groupBy { it.session } else emptyMap()
         return sessions.associateWith { session -> bySession[session].orEmpty().map { DocumentLinkDto(it.fileId) } }
+    }
+}
+
+/** A Koofr folder linked to an episode or session: a place shared with the bot, named when Koofr answers, and a path */
+data class KoofrFolderLinkDto(val place: String, val placeName: String?, val path: String)
+
+// Everything about one episode or session, for its page. What isn't public is empty, or null, for anyone else, as an
+// episode or session can also be reached through the released episodes.
+@Controller
+class DetailsGraphQL(
+    private val episodeRepository: EpisodesRepository,
+    private val sessionRepository: SessionsRepository,
+    private val episodeFolders: EpisodeKoofrFoldersRepository,
+    private val sessionFolders: SessionKoofrFoldersRepository,
+    private val history: History,
+    private val koofr: ObjectProvider<Koofr>,
+) {
+
+    @QueryMapping
+    @PreAuthorize(SIGNED_IN)
+    fun episode(@Argument ref: String): Episode? = episodeRepository.findByRef(ref)
+
+    @QueryMapping
+    @PreAuthorize(SIGNED_IN)
+    fun session(@Argument id: UUID): Session? = sessionRepository.findByIdOrNull(id)
+
+    @SchemaMapping(typeName = "Episode")
+    fun machineSummary(episode: Episode): String? = episode.machineSummary.takeIf { signedIn() }
+
+    @SchemaMapping(typeName = "Episode", field = "koofrFolders")
+    fun episodeKoofrFolders(episode: Episode): List<KoofrFolderLinkDto> =
+        if (signedIn()) folders(episodeFolders.findByEpisode(episode).map { it.place to it.path }) else emptyList()
+
+    @SchemaMapping(typeName = "Episode", field = "history")
+    fun episodeHistory(episode: Episode): List<HistoryEntryDto> =
+        if (signedIn()) history.of(checkNotNull(episode.id)) else emptyList()
+
+    @SchemaMapping(typeName = "Session")
+    fun address(session: Session): String? = session.address.takeIf { signedIn() }
+
+    @SchemaMapping(typeName = "Session", field = "episodes")
+    fun sessionEpisodes(session: Session): List<Episode> =
+        if (signedIn()) episodeRepository.findBySessionOrderByCodeDesc(session).sortedWith(compareBy(nullsLast()) { it.code })
+        else emptyList()
+
+    @SchemaMapping(typeName = "Session", field = "koofrFolders")
+    fun sessionKoofrFolders(session: Session): List<KoofrFolderLinkDto> =
+        if (signedIn()) folders(sessionFolders.findBySession(session).map { it.place to it.path }) else emptyList()
+
+    @SchemaMapping(typeName = "Session", field = "history")
+    fun sessionHistory(session: Session): List<HistoryEntryDto> =
+        if (signedIn()) history.of(checkNotNull(session.id)) else emptyList()
+
+    // Places by name when Koofr is on and answers; a page doesn't fail for want of a name
+    private fun folders(links: List<Pair<String, String>>): List<KoofrFolderLinkDto> {
+        if (links.isEmpty()) return emptyList()
+        val names = runCatching { koofr.ifAvailable?.places()?.associate { it.id to it.name } }.getOrNull().orEmpty()
+        return links.map { (place, path) -> KoofrFolderLinkDto(place, names[place], path) }
+            .sortedWith(compareBy({ it.placeName }, { it.path }))
     }
 }
 

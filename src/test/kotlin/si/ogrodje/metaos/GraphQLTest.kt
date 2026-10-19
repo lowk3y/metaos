@@ -3,7 +3,12 @@ package si.ogrodje.metaos
 import com.jayway.jsonpath.JsonPath
 import org.hamcrest.Matchers.contains
 import org.hamcrest.Matchers.empty
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
+import org.springframework.security.core.context.SecurityContextHolder
+import org.springframework.security.oauth2.jwt.Jwt
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
+import kotlin.test.assertNull
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
@@ -32,9 +37,93 @@ class GraphQLTest @Autowired constructor(
     private val sessions: SessionsRepository,
     private val episodeDocuments: EpisodeDocumentsRepository,
     private val sessionDocuments: SessionDocumentsRepository,
+    private val episodesMCP: EpisodesMCP,
+    private val sessionsMCP: SessionsMCP,
+    private val peopleMCP: PeopleMCP,
+    private val details: DetailsGraphQL,
 ) {
 
     private val reader = jwt().jwt { it.claim("scope", API_READ_SCOPE) }
+
+    @AfterEach
+    fun signOut() = SecurityContextHolder.clearContext()
+
+    // Changes made through MCP tools by someone signed in, so the audit log has who made them and with which tool
+    private fun <T> asMcpUser(block: () -> T): T {
+        val jwt = Jwt.withTokenValue("token").header("alg", "none")
+            .subject("ana-id").claim("preferred_username", "ana").claim("azp", "claude-code").build()
+        SecurityContextHolder.getContext().authentication = JwtAuthenticationToken(jwt)
+        return try { block() } finally { SecurityContextHolder.clearContext() }
+    }
+
+    @Test
+    fun `shows signed-in users an episode with all its details and its history`() {
+        asMcpUser {
+            episodesMCP.create(code = "gq-h1", title = "Draft title")
+            episodesMCP.update(code = "gq-h1", newCode = null, title = "Final title", summary = "About it", machineSummary = "AI on it")
+            episodesMCP.assignPerson("gq-h1", checkNotNull(peopleMCP.create(name = "History Host", email = null).id), Role.HOST)
+        }
+
+        graphql(
+            """{ episode(ref: "gq-h1") { title summary machineSummary addedDate
+                 history { actor tool summary fields { field from to } } } }""",
+            reader,
+        )
+            .andExpect(jsonPath("$.errors").doesNotExist())
+            .andExpect(jsonPath("$.data.episode.title").value("Final title"))
+            .andExpect(jsonPath("$.data.episode.machineSummary").value("AI on it"))
+            .andExpect(jsonPath("$.data.episode.history[*].summary",
+                contains("Created the episode", "Changed the episode", "Added History Host as host")))
+            .andExpect(jsonPath("$.data.episode.history[0].actor").value("ana"))
+            .andExpect(jsonPath("$.data.episode.history[0].tool").value("create_episode"))
+            .andExpect(jsonPath("$.data.episode.history[1].fields[*].field", contains("Title", "Summary", "AI summary")))
+            .andExpect(jsonPath("$.data.episode.history[1].fields[0].from").value("Draft title"))
+            .andExpect(jsonPath("$.data.episode.history[1].fields[0].to").value("Final title"))
+            // Too long to show
+            .andExpect(jsonPath("$.data.episode.history[1].fields[1].to").value(null as Any?))
+    }
+
+    @Test
+    fun `shows signed-in users a session with its episodes and its history`() {
+        val sessionId = asMcpUser {
+            val session = sessionsMCP.create(LocalDate.of(2099, 7, 1), location = "History Hall", address = "Hidden street 1")
+            episodesMCP.create(code = "gq-h3", title = "Third")
+            episodesMCP.create(code = "gq-h2", title = "Second")
+            sessionsMCP.setEpisodeSession("gq-h3", session.id)
+            sessionsMCP.setEpisodeSession("gq-h2", session.id)
+            checkNotNull(session.id)
+        }
+
+        graphql("""{ session(id: "$sessionId") { location address episodes { code } history { summary fields { field to } } } }""", reader)
+            .andExpect(jsonPath("$.errors").doesNotExist())
+            .andExpect(jsonPath("$.data.session.address").value("Hidden street 1"))
+            .andExpect(jsonPath("$.data.session.episodes[*].code", contains("gq-h2", "gq-h3")))
+            .andExpect(jsonPath("$.data.session.history[*].summary",
+                contains("Created the session", "Added gq-h3 to the session", "Added gq-h2 to the session")))
+            .andExpect(jsonPath("$.data.session.history[0].fields[*].to", contains("1 Jul 2099", "History Hall", "Hidden street 1")))
+    }
+
+    @Test
+    fun `keeps episodes' and sessions' details from anyone not signed in`() {
+        val session = sessionsMCP.create(LocalDate.of(2099, 8, 1), location = "Closed Hall", address = "Hidden street 2")
+        episodesMCP.create(code = "gq-h4", title = "Private")
+        val episode = checkNotNull(episodes.findByCode("gq-h4")).apply { machineSummary = "AI on it"; this.session = sessions.findById(checkNotNull(session.id)).get() }
+        episodes.save(episode)
+
+        graphql("""{ episode(ref: "gq-h4") { title } }""")
+            .andExpect(jsonPath("$.errors[0].extensions.classification").value("UNAUTHORIZED"))
+        graphql("""{ session(id: "${session.id}") { location } }""")
+            .andExpect(jsonPath("$.errors[0].extensions.classification").value("UNAUTHORIZED"))
+
+        // Where an episode or session is public, e.g. among the released episodes, what's private stays empty
+        val saved = checkNotNull(episodes.findByCode("gq-h4"))
+        val savedSession = sessions.findById(checkNotNull(session.id)).get()
+        assertNull(details.machineSummary(saved))
+        assertEquals(emptyList(), details.episodeHistory(saved))
+        assertNull(details.address(savedSession))
+        assertEquals(emptyList(), details.sessionEpisodes(savedSession))
+        assertEquals(emptyList(), details.sessionHistory(savedSession))
+    }
 
     private fun graphql(query: String, auth: RequestPostProcessor? = null): ResultActions {
         val request = post("/graphql").contentType(MediaType.APPLICATION_JSON)
@@ -108,8 +197,8 @@ class GraphQLTest @Autowired constructor(
             .andReturn().response.contentAsString
 
         // Other tests' episodes may be there too. An idea without a session or a date (gq-u9) isn't a recording yet.
-        val upcoming = JsonPath.read<List<String>>(answer, "$.data.upcomingRecordings[*].code").filter { it.startsWith("gq-") }
-        val inProduction = JsonPath.read<List<String>>(answer, "$.data.inProduction[*].code").filter { it.startsWith("gq-") }
+        val upcoming = JsonPath.read<List<String>>(answer, "$.data.upcomingRecordings[*].code").filter { it.startsWith("gq-u") }
+        val inProduction = JsonPath.read<List<String>>(answer, "$.data.inProduction[*].code").filter { it.startsWith("gq-p") }
         assertEquals(listOf("gq-u1", "gq-u2"), upcoming)
         assertEquals(listOf("gq-p1", "gq-p2"), inProduction)
         assertEquals(listOf("GraphQL Conf"), JsonPath.read(answer, "$.data.upcomingRecordings[?(@.code == 'gq-u2')].session.location"))

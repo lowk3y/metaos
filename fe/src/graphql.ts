@@ -1,5 +1,10 @@
 import { useAuthStore } from '@/stores/auth'
 
+/** What went wrong, for the page to say */
+export function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
+}
+
 /** Asks MetaOS's GraphQL API (/graphql), as the signed-in user when there is one */
 export async function graphql<T>(query: string, variables: Record<string, unknown> = {}): Promise<T> {
   const token = await useAuthStore().token()

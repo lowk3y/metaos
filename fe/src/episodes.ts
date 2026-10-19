@@ -49,6 +49,60 @@ export interface Episode {
   documents: GoogleDoc[]
 }
 
+/** A Koofr folder shared with Ogrodje's bot: a place, by name when Koofr answers, and a path in it */
+export interface KoofrFolder {
+  place: string
+  placeName: string | null
+  path: string
+}
+
+/** One field of a change; from and to are null when there's nothing short to show, e.g. a summary */
+export interface FieldChange {
+  field: string
+  from: string | null
+  to: string | null
+}
+
+/** A change from the audit log, told as what happened */
+export interface Change {
+  at: string
+  actor: string | null
+  client: string | null
+  tool: string | null
+  summary: string
+  fields: FieldChange[]
+}
+
+/** An episode with everything about it, for its page */
+export interface EpisodeDetails extends Episode {
+  show: string | null
+  summary: string | null
+  machineSummary: string | null
+  addedDate: string
+  koofrFolders: KoofrFolder[]
+  history: Change[]
+}
+
+/** A session with everything about it, for its page */
+export interface SessionDetails extends Session {
+  address: string | null
+  episodes: Episode[]
+  koofrFolders: KoofrFolder[]
+  history: Change[]
+}
+
+export const KOOFR_FIELDS = 'koofrFolders { place placeName path }'
+export const HISTORY_FIELDS = 'history { at actor client tool summary fields { field from to } }'
+
+/** An episode's page: at its code, or at its ID while it has none */
+export function episodePath(episode: Pick<Episode, 'id' | 'code'>) {
+  return `/episodes/${encodeURIComponent(episode.code ?? episode.id)}`
+}
+
+export function sessionPath(session: Pick<Session, 'id'>) {
+  return `/sessions/${session.id}`
+}
+
 /** The fields of an Episode, for a query */
 export const EPISODE_FIELDS = `
   id code title status recordingDate airedDate youtubeUrl spotifyUrl applePodcastsUrl patreonUrl
@@ -85,6 +139,11 @@ export function statusName(status: EpisodeStatus) {
 
 export function formatDate(date: string) {
   return new Date(date).toLocaleDateString(undefined, { dateStyle: 'medium' })
+}
+
+/** A session as people know it: when and where, e.g. 22 Oct 2026 · AWS Community Day Adria */
+export function sessionTitle(session: Pick<Session, 'date' | 'location'>) {
+  return [formatDate(session.date), session.location].filter(Boolean).join(' · ')
 }
 
 export interface SessionGroup {

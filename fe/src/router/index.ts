@@ -9,6 +9,17 @@ const router = createRouter({
       name: 'home',
       component: HomeView,
     },
+    // An episode's and a session's page, behind sign-in; an episode by its code, or its ID while it has none
+    {
+      path: '/episodes/:ref',
+      name: 'episode',
+      component: () => import('../views/EpisodeView.vue'),
+    },
+    {
+      path: '/sessions/:id',
+      name: 'session',
+      component: () => import('../views/SessionView.vue'),
+    },
     {
       path: '/usage',
       name: 'usage',

@@ -1,0 +1,139 @@
+package si.ogrodje.metaos
+
+import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.stereotype.Component
+import java.time.LocalDate
+import java.time.OffsetDateTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+import java.util.UUID
+
+/** One field of a change, as people read it; from and to are null where there's nothing short to show, e.g. a summary */
+data class FieldChangeDto(val field: String, val from: String?, val to: String?)
+
+/** A change to an episode or session, or to what's linked to it, as the front-end shows it */
+data class HistoryEntryDto(
+    val at: OffsetDateTime,
+    val actor: String?,
+    val client: String?,
+    val tool: String?,
+    val summary: String,
+    val fields: List<FieldChangeDto>,
+)
+
+private val DATE = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.UK)
+
+// The columns people care about, in the order they're shown, by their names
+private val EPISODE_COLUMNS = linkedMapOf(
+    "code" to "Code", "title" to "Title", "status" to "Status", "show_id" to "Show", "session_id" to "Session",
+    "recording_date" to "Recording date", "aired_date" to "Aired", "added_date" to "Added",
+    "youtube_url" to "YouTube", "spotify_url" to "Spotify", "apple_podcasts_url" to "Apple Podcasts",
+    "patreon_url" to "Patreon", "summary" to "Summary", "machine_summary" to "AI summary",
+)
+private val SESSION_COLUMNS = linkedMapOf("date" to "Date", "location" to "Location", "address" to "Address")
+
+// Too long to show what they were and what they became
+private val LONG_COLUMNS = setOf("summary", "machine_summary")
+private val DATE_COLUMNS = setOf("recording_date", "aired_date", "added_date", "date")
+
+/**
+ * The history of an episode or a session, from the audit log (AuditLog): each change told as what happened, with
+ * people, shows and sessions by name rather than by ID.
+ */
+@Component
+class History(private val auditLog: AuditLog, private val jdbcTemplate: JdbcTemplate) {
+
+    fun of(id: UUID): List<HistoryEntryDto> {
+        val rows = auditLog.history(id)
+        val names = Names(
+            people = names("select id, name from people", rows.ids("person_id")),
+            shows = names("select id, name from shows", rows.ids("show_id")),
+            sessions = names("select id, date, location from sessions", rows.ids("session_id")) { rs ->
+                listOfNotNull(DATE.format(rs.getObject("date", LocalDate::class.java)), rs.getString("location")).joinToString(" · ")
+            },
+        )
+        return rows.map { row ->
+            val described = names.describe(row, subject = id.toString())
+            HistoryEntryDto(row.at, row.actor, row.client, row.tool, described.summary, described.fields)
+        }
+    }
+
+    private fun List<AuditRow>.ids(column: String): Set<String> =
+        flatMap { listOf(it.old[column], it.new[column]) }.mapNotNull { it?.toString() }.toSet()
+
+    // Soft-deleted ones too: a change shows what was there when it was made
+    private fun names(
+        select: String,
+        ids: Set<String>,
+        name: (java.sql.ResultSet) -> String = { it.getString(2) },
+    ): Map<String, String> =
+        if (ids.isEmpty()) emptyMap()
+        else jdbcTemplate.query("$select where id::text in (${ids.joinToString { "?" }})", { rs, _ -> rs.getString(1) to name(rs) },
+            *ids.toTypedArray()).toMap()
+}
+
+private data class Described(val summary: String, val fields: List<FieldChangeDto> = emptyList())
+
+private class Names(val people: Map<String, String>, val shows: Map<String, String>, val sessions: Map<String, String>) {
+
+    fun describe(row: AuditRow, subject: String): Described = when (row.table) {
+        "episodes" -> if (row.rowId.toString() == subject) change(row, "episode", EPISODE_COLUMNS) else inSession(row, subject)
+        "sessions" -> change(row, "session", SESSION_COLUMNS)
+        "episode_people" -> role(row)
+        "episode_documents", "session_documents" ->
+            Described(if (row.operation == "DELETE") "Unlinked a Google Doc" else "Linked a Google Doc")
+        "episode_koofr_folders", "session_koofr_folders" -> folder(row)
+        else -> Described("Changed ${row.table}")
+    }
+
+    // The episode or the session itself; soft deletes set deleted_at
+    private fun change(row: AuditRow, what: String, columns: Map<String, String>): Described {
+        val diff = row.diff()
+        val deletedAt = diff["deleted_at"]
+        return when {
+            row.operation == "INSERT" -> Described("Created the $what", fields(diff, columns))
+            row.operation == "DELETE" -> Described("Deleted the $what for good")
+            deletedAt != null -> Described(if (deletedAt.to != null) "Deleted the $what" else "Restored the $what")
+            else -> Described("Changed the $what", fields(diff, columns))
+        }
+    }
+
+    private fun fields(diff: Map<String, ColumnChange>, columns: Map<String, String>): List<FieldChangeDto> =
+        columns.filterKeys { it in diff }.map { (column, label) ->
+            val change = diff.getValue(column)
+            if (column in LONG_COLUMNS) FieldChangeDto(label, null, null)
+            else FieldChangeDto(label, value(column, change.from), value(column, change.to))
+        }
+
+    private fun value(column: String, value: Any?): String? = when {
+        value == null -> null
+        column == "status" -> value.toString().lowercase().replace('_', ' ')
+        column == "show_id" -> shows[value.toString()] ?: "a show deleted since"
+        column == "session_id" -> sessions[value.toString()] ?: "a session deleted since"
+        column in DATE_COLUMNS -> runCatching { DATE.format(LocalDate.parse(value.toString())) }.getOrDefault(value.toString())
+        else -> value.toString()
+    }
+
+    // An episode moving in or out of the session whose history this is
+    private fun inSession(row: AuditRow, session: String): Described {
+        val episode = (row.new["code"] ?: row.old["code"])?.toString() ?: "\"${row.new["title"] ?: row.old["title"]}\""
+        return Described(if (row.new["session_id"]?.toString() == session) "Added $episode to the session" else "Took $episode out of the session")
+    }
+
+    private fun role(row: AuditRow): Described {
+        val person = people[(row.new["person_id"] ?: row.old["person_id"]).toString()] ?: "someone deleted since"
+        // CO_HOST -> co-host, as the front-end has it
+        fun role(values: Map<String, Any?>) = values["role"]?.toString()?.lowercase()?.replace('_', '-')
+        return when (row.operation) {
+            "INSERT" -> Described("Added $person as ${role(row.new)}")
+            "DELETE" -> Described("Removed $person as ${role(row.old)}")
+            else -> Described("Changed $person's role", listOf(FieldChangeDto("Role", role(row.old), role(row.new))))
+        }
+    }
+
+    private fun folder(row: AuditRow): Described = when (row.operation) {
+        "INSERT" -> Described("Linked the Koofr folder ${row.new["path"]}")
+        "DELETE" -> Described("Unlinked the Koofr folder ${row.old["path"]}")
+        else -> Described("Moved a Koofr folder", listOf(FieldChangeDto("Path", row.old["path"]?.toString(), row.new["path"]?.toString())))
+    }
+}
