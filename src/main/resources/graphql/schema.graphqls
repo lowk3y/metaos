@@ -1,9 +1,18 @@
 # MetaOS's GraphQL API (GraphQL.kt), at /graphql. Anyone may query what's public, like the released episodes; the
-# rest will need a token from Keycloak with metaos:read, and changes one with metaos:write.
+# rest needs a token from Keycloak with metaos:read, and changes will need one with metaos:write.
 
 type Query {
     "The latest released (PUBLISHED) episodes, the most recently aired first; at most 20"
     releasedEpisodes(limit: Int! = 3): [Episode!]!
+
+    """
+    Episodes still to be recorded (IDEA, PLANNED, SCHEDULED) that have a session or a recording date, the soonest
+    first. Needs a signed-in user.
+    """
+    upcomingRecordings: [Episode!]!
+
+    "Recorded episodes that aren't public yet, the earliest recorded first. Needs a signed-in user."
+    inProduction: [Episode!]!
 
     "The signed-in user, from the bearer token; null without one"
     me: CurrentUser
@@ -16,6 +25,11 @@ type Episode {
     title: String!
     "The show it's part of"
     show: String
+    status: EpisodeStatus!
+    "The recording session it's part of"
+    session: Session
+    "When it is or was recorded, e.g. 2026-10-19"
+    recordingDate: String
     "When it was released, e.g. 2026-10-19"
     airedDate: String
     "Description of the episode, in Markdown"
@@ -24,6 +38,55 @@ type Episode {
     spotifyUrl: String
     applePodcastsUrl: String
     patreonUrl: String
+    "The people on the episode, each once with all of their roles; hosts first"
+    people: [EpisodePerson!]!
+    "Google Docs about the episode, e.g. its preparation doc, the first linked first. None without a signed-in user."
+    documents: [Document!]!
+}
+
+"A Google Doc in Ogrodje's Drive folder"
+type Document {
+    fileId: ID!
+    url: String!
+}
+
+"Where and when several episodes get recorded, e.g. at a conference"
+type Session {
+    id: ID!
+    "e.g. 2026-10-22"
+    date: String!
+    location: String
+    "Google Docs about the session, e.g. its recording day plan, the first linked first. None without a signed-in user."
+    documents: [Document!]!
+}
+
+"Where an episode is in its lifecycle"
+enum EpisodeStatus {
+    IDEA
+    PLANNED
+    SCHEDULED
+    RECORDED
+    IN_PRODUCTION
+    READY
+    EARLY_ACCESS
+    PUBLISHED
+    ON_HOLD
+    CANCELLED
+}
+
+type EpisodePerson {
+    personId: ID!
+    name: String!
+    roles: [Role!]!
+}
+
+enum Role {
+    HOST
+    CO_HOST
+    GUEST
+    PRODUCER
+    CONSULTANT
+    DESIGNER
 }
 
 type CurrentUser {

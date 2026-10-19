@@ -117,6 +117,9 @@ interface EpisodePeopleRepository : JpaRepository<EpisodePerson, UUID> {
     @Query("select ep from EpisodePerson ep join fetch ep.person where ep.episode = :episode")
     fun findByEpisodeWithPerson(episode: Episode): List<EpisodePerson>
 
+    @Query("select ep from EpisodePerson ep join fetch ep.person where ep.episode in :episodes")
+    fun findByEpisodesWithPerson(episodes: Collection<Episode>): List<EpisodePerson>
+
     @Query("select ep from EpisodePerson ep join fetch ep.episode e where ep.person = :person order by e.code desc")
     fun findByPersonWithEpisode(person: Person): List<EpisodePerson>
 }

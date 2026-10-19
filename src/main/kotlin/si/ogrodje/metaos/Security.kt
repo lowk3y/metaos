@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.http.HttpMethod
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.http.SessionCreationPolicy
 import org.springframework.security.core.context.SecurityContextHolder
@@ -15,6 +16,9 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.web.SecurityFilterChain
 
 const val MCP_SCOPE = "mcp:tools"
+
+/** For reading what isn't public through /graphql; the front-end's tokens have it (keycloak/frontend_client.sh) */
+const val API_READ_SCOPE = "metaos:read"
 
 /** Keycloak access token of the user calling the MCP tools. */
 fun currentJwt(): Jwt? = (SecurityContextHolder.getContext().authentication as? JwtAuthenticationToken)?.token
@@ -29,6 +33,8 @@ val Jwt.verifiedEmail: String?
  * from where they discover Keycloak, register themselves (DCR) and log the user in.
  */
 @Configuration
+// @PreAuthorize on what /graphql answers only signed-in users (GraphQL.kt)
+@EnableMethodSecurity
 class SecurityConfig {
 
     @Bean
@@ -47,7 +53,7 @@ class SecurityConfig {
             // Anyone may ask for what's public, e.g. the released episodes; the rest needs a token (GraphQL.kt)
             it.requestMatchers("/graphql").permitAll()
             // The front-end (Frontend.kt): its files and pages are public - its data comes from the API, with a token
-            it.requestMatchers(HttpMethod.GET, "/assets/**", "/favicon.ico", "/silent-check-sso.html", "/config.json")
+            it.requestMatchers(HttpMethod.GET, "/assets/**", "/favicon.png", "/silent-check-sso.html", "/config.json")
                 .permitAll()
             it.requestMatchers(frontendPage).permitAll()
             // The error page of a request let in, e.g. a missing asset's 404, which would otherwise become a 401

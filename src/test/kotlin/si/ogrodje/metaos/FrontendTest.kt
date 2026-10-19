@@ -65,11 +65,12 @@ class FrontendTest @Autowired constructor(private val mvc: MockMvc) {
     }
 
     @Test
-    fun `tells the front-end where users sign in`() {
+    fun `tells the front-end where users sign in and where MCP clients connect`() {
         mvc.get("/config.json").andExpect {
             status { isOk() }
             jsonPath("$.issuer") { value("http://issuer.invalid/realms/metaos") }
             jsonPath("$.clientId") { value("metaos-ui") }
+            jsonPath("$.mcpUrl") { value("https://metaos.example/mcp") }
         }
     }
 }

@@ -9,6 +9,10 @@ MetaOS was designed for scaling, optimising and helping grow the [Ogrodje] organ
 - This project uses Nix and devenv for dependency isolation and reproducability.
 - The project is written in Kotlin and uses Spring Boot at its core.
 - Services and infrastructure is deployed via Kubernetes
+- **MCP tools and the Usage page stay in sync.** Whenever an MCP tool (`@McpTool`) is added, renamed, removed or
+  changes what it does, update the front-end's Usage page in the same change: the tool's entry in
+  [`fe/src/tools.ts`](fe/src/tools.ts) (name, group and one-line description). `UsageToolsTest` fails on a missing
+  or extra name, but can't tell when a description no longer fits.
 
 ### Front-end
 
@@ -31,7 +35,10 @@ yarn build      # type-check (vue-tsc) and build into fe/dist
   it: the files, and `index.html` for the router's paths (`createWebHistory`); its files and pages are public, while
   its data needs a token. Runs and tests don't build `fe/`.
 - `/config.json` tells the front-end where users sign in (the Keycloak issuer) and as which client
-  (`metaos.frontend.client-id`), so one build works in every environment.
+  (`metaos.frontend.client-id`), and where MCP clients connect (`METAOS_MCP_URL`), so one build works in every
+  environment.
+- The Usage page (`/usage`) shows how to install the MCP server and lists its tools by hand, from
+  [`fe/src/tools.ts`](fe/src/tools.ts), which has to follow every change to the tools (see above).
 - Data comes from the GraphQL API at `/graphql` ([`schema.graphqls`](src/main/resources/graphql/schema.graphqls),
   [`GraphQL.kt`](src/main/kotlin/si/ogrodje/metaos/GraphQL.kt)), through `fe/src/graphql.ts`. It's open to anyone, as
   some of it is public (`releasedEpisodes`); a bearer token says who is asking (`me`).

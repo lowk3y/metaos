@@ -68,15 +68,19 @@ class FrontendConfig : WebMvcConfigurer {
     }
 }
 
-/** What the front-end needs at runtime, so one build works with any Keycloak: where users sign in, and as which client */
-data class FrontendConfigDto(val issuer: String, val clientId: String)
+/**
+ * What the front-end needs at runtime, so one build works everywhere: where users sign in and as which client, and
+ * where MCP clients connect (the Usage page)
+ */
+data class FrontendConfigDto(val issuer: String, val clientId: String, val mcpUrl: String)
 
 @RestController
 class FrontendController(
     @Value("\${spring.security.oauth2.resourceserver.jwt.issuer-uri}") private val issuer: String,
     @Value("\${metaos.frontend.client-id}") private val clientId: String,
+    @Value("\${metaos.frontend.mcp-url}") private val mcpUrl: String,
 ) {
 
     @GetMapping("/config.json")
-    fun config() = FrontendConfigDto(issuer, clientId)
+    fun config() = FrontendConfigDto(issuer, clientId, mcpUrl)
 }

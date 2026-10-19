@@ -65,7 +65,7 @@ private fun Person.onEpisode(assignments: List<EpisodePerson>) =
     EpisodePersonDto(id, name, email, assignments.map { it.role }.sorted())
 
 // One entry per person, with all of their roles on the episode; hosts first
-private fun List<EpisodePerson>.toEpisodePersonDtos(): List<EpisodePersonDto> =
+fun List<EpisodePerson>.toEpisodePersonDtos(): List<EpisodePersonDto> =
     groupBy { it.person.id }.values.map { it.first().person.onEpisode(it) }
         .sortedWith(compareBy({ it.roles.first() }, { it.name }))
 

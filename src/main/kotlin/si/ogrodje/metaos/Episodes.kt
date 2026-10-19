@@ -124,6 +124,8 @@ interface EpisodesRepository : JpaRepository<Episode, UUID> {
     @Query("select e from Episode e where e.status = :status order by e.code desc nulls last")
     fun findLatestFirstByStatus(status: EpisodeStatus): List<Episode>
 
+    fun findByStatusIn(statuses: Collection<EpisodeStatus>): List<Episode>
+
     @Query("select e from Episode e where e.session = :session order by e.code desc nulls last")
     fun findBySessionOrderByCodeDesc(session: Session): List<Episode>
 

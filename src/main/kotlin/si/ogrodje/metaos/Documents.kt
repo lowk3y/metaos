@@ -2,6 +2,7 @@ package si.ogrodje.metaos
 
 import jakarta.persistence.*
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Query
 import java.util.UUID
 
 /** A Google Doc in the Ogrodje folder that is about an episode, e.g. its preparation doc */
@@ -31,6 +32,10 @@ class EpisodeDocument(
 interface EpisodeDocumentsRepository : JpaRepository<EpisodeDocument, UUID> {
     fun findByEpisode(episode: Episode): List<EpisodeDocument>
     fun findByEpisodeAndFileId(episode: Episode, fileId: String): EpisodeDocument?
+
+    // The first linked first
+    @Query("select * from episode_documents where episode_id in :episodeIds order by created_at", nativeQuery = true)
+    fun findByEpisodeIds(episodeIds: Collection<UUID>): List<EpisodeDocument>
 }
 
 /** A Google Doc in the Ogrodje folder that is about a recording session, e.g. its recording day plan */
@@ -60,4 +65,8 @@ class SessionDocument(
 interface SessionDocumentsRepository : JpaRepository<SessionDocument, UUID> {
     fun findBySession(session: Session): List<SessionDocument>
     fun findBySessionAndFileId(session: Session, fileId: String): SessionDocument?
+
+    // The first linked first
+    @Query("select * from session_documents where session_id in :sessionIds order by created_at", nativeQuery = true)
+    fun findBySessionIds(sessionIds: Collection<UUID>): List<SessionDocument>
 }

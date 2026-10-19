@@ -11,6 +11,8 @@ interface FrontendConfig {
   clientId: string
 }
 
+const SIGN_IN_CHECK_TIMEOUT = 5000
+
 /** The signed-in user, through Keycloak's client metaos-ui */
 export const useAuthStore = defineStore('auth', () => {
   let keycloak: Keycloak | undefined
@@ -26,16 +28,22 @@ export const useAuthStore = defineStore('auth', () => {
       const [, url, realm] = config.issuer.match(/^(.+)\/realms\/([^/]+)$/) ?? []
       if (!url || !realm) throw new Error(`Unexpected issuer ${config.issuer}`)
 
-      keycloak = new Keycloak({ url, realm, clientId: config.clientId })
-      authenticated.value = await keycloak.init({
+      const client = new Keycloak({ url, realm, clientId: config.clientId })
+      keycloak = client
+      const checked = client.init({
         // Signed in already? Asked in a hidden iframe (public/silent-check-sso.html), so the page stays where it is
         onLoad: 'check-sso',
         silentCheckSsoRedirectUri: `${location.origin}/silent-check-sso.html`,
         pkceMethod: 'S256',
         // A sign-out elsewhere shows when the token can't be refreshed any more
         checkLoginIframe: false,
-      })
-      username.value = keycloak.tokenParsed?.preferred_username
+      }).then((signedIn) => {
+        authenticated.value = signedIn
+        username.value = client.tokenParsed?.preferred_username
+      }).catch((error) => console.error('Signing in is unavailable', error))
+      // keycloak-js waits for the iframe for ever when Keycloak doesn't answer, e.g. when it's down. Until it does,
+      // the user is a guest, who can still try to sign in.
+      await Promise.race([checked, new Promise((resolve) => setTimeout(resolve, SIGN_IN_CHECK_TIMEOUT))])
     } catch (error) {
       console.error('Signing in is unavailable', error)
     } finally {

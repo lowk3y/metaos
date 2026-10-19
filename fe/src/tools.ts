@@ -1,0 +1,127 @@
+// MetaOS's MCP tools, for the Usage page, by what they work on. A tool that's added, renamed, removed or does
+// something else changes here too (CLAUDE.md); UsageToolsTest checks the names, but not the descriptions.
+
+export interface Tool {
+  name: string
+  description: string
+}
+
+export interface ToolGroup {
+  id: string
+  title: string
+  about: string
+  tools: Tool[]
+}
+
+export const TOOL_GROUPS: ToolGroup[] = [
+  {
+    id: 'episodes',
+    title: 'Episodes',
+    about: 'from idea to release',
+    tools: [
+      { name: 'list_episodes', description: 'List episodes, latest first, optionally only those with a given status' },
+      { name: 'get_episode', description: 'An episode by its code or ID, with its summaries' },
+      { name: 'create_episode', description: 'Add an episode; it starts as an idea, which can do without a code' },
+      { name: 'update_episode', description: "Change an episode's code, title, summaries or dates" },
+      { name: 'set_episode_status', description: 'Move an episode through its lifecycle, from idea to published, one step at a time' },
+      { name: 'set_episode_link', description: 'Set or clear its YouTube, Spotify, Apple Podcasts or Patreon link' },
+      { name: 'delete_episode', description: 'Delete an episode; it can be restored' },
+      { name: 'restore_episode', description: 'Bring back a deleted episode, with its people, links, session and show' },
+    ],
+  },
+  {
+    id: 'people',
+    title: 'People',
+    about: 'hosts, guests, producers and you',
+    tools: [
+      { name: 'list_people', description: 'List all people' },
+      { name: 'create_person', description: 'Add a person' },
+      { name: 'set_person_email', description: "Set or clear a person's email; whoever signs in with it is linked to them" },
+      { name: 'set_person_bio', description: 'Set or clear the line about who a person is, e.g. their role and company' },
+      { name: 'set_person_link', description: 'Set or clear their homepage, LinkedIn, Twitter/X, Instagram or Facebook' },
+      { name: 'delete_person', description: 'Delete a person; they drop off their episodes until they are restored' },
+      { name: 'restore_person', description: 'Bring back a deleted person, with their roles on episodes' },
+      { name: 'list_episode_people', description: 'The people on an episode and their roles' },
+      { name: 'assign_person_to_episode', description: 'Give a person a role on an episode: host, co-host, guest, producer, consultant or designer' },
+      { name: 'remove_person_from_episode', description: 'Take a person off an episode: one of their roles, or all of them' },
+      { name: 'list_person_episodes', description: 'The episodes a person is on, and their roles' },
+      { name: 'whoami', description: "Who you're signed in as, and the person linked to you" },
+      { name: 'my_episodes', description: "The episodes you're on, and your roles" },
+    ],
+  },
+  {
+    id: 'sessions',
+    title: 'Recording sessions',
+    about: 'days on which episodes are recorded',
+    tools: [
+      { name: 'list_sessions', description: 'List all sessions, newest first' },
+      { name: 'create_session', description: 'Add a session: its date, location and address' },
+      { name: 'update_session', description: "Change a session's date, location or address" },
+      { name: 'delete_session', description: 'Delete a session; its episodes are kept' },
+      { name: 'restore_session', description: 'Bring back a deleted session, with its episodes' },
+      { name: 'list_session_episodes', description: 'The episodes of a session' },
+      { name: 'set_episode_session', description: 'Move an episode into a session, or out of one' },
+    ],
+  },
+  {
+    id: 'shows',
+    title: 'Shows',
+    about: 'series of episodes, such as Borderless',
+    tools: [
+      { name: 'list_shows', description: 'List all shows' },
+      { name: 'get_show', description: 'A show by its name' },
+      { name: 'create_show', description: 'Add a show' },
+      { name: 'update_show', description: 'Rename a show or change its color' },
+      { name: 'delete_show', description: 'Delete a show; its episodes are kept' },
+      { name: 'restore_show', description: 'Bring back a deleted show, with its episodes' },
+      { name: 'list_show_episodes', description: 'The episodes of a show' },
+      { name: 'set_episode_show', description: 'Move an episode into a show, or out of one' },
+    ],
+  },
+  {
+    id: 'google-drive',
+    title: 'Google Drive',
+    about: "Ogrodje's folder",
+    tools: [
+      { name: 'list_drive_folder', description: 'What is in a folder' },
+      { name: 'search_documents', description: 'Search Google Docs by the words in their title or text' },
+      { name: 'read_document', description: 'Read a Google Doc, as Markdown' },
+      { name: 'list_episode_documents', description: 'The Google Docs of an episode and of its recording session' },
+      { name: 'link_episode_document', description: 'Link a Google Doc to an episode, e.g. its preparation doc' },
+      { name: 'unlink_episode_document', description: 'Unlink a Google Doc from an episode; the doc stays in Drive' },
+      { name: 'list_session_documents', description: 'The Google Docs of a recording session' },
+      { name: 'link_session_document', description: 'Link a Google Doc to a recording session, e.g. its recording day plan' },
+      { name: 'unlink_session_document', description: 'Unlink a Google Doc from a recording session; the doc stays in Drive' },
+      { name: 'match_episode_documents', description: 'Link the docs in a folder to episodes by the code in their titles; only reports, unless told to link' },
+    ],
+  },
+  {
+    id: 'koofr',
+    title: 'Koofr',
+    about: "the folders shared with Ogrodje's bot",
+    tools: [
+      { name: 'list_koofr_places', description: "The folders shared with Ogrodje's bot, and whether it may change them" },
+      { name: 'list_koofr_folder', description: 'What is in a folder' },
+      { name: 'search_koofr', description: 'Search for files and folders by name' },
+      { name: 'read_koofr_file', description: 'Read a text file: txt, md, csv, json, srt and the like' },
+      { name: 'upload_koofr_file', description: 'Upload a file; one of the same name is only replaced when asked' },
+      { name: 'create_koofr_folder', description: 'Create a folder' },
+      { name: 'move_koofr_file', description: 'Move or rename a file or folder; what it is linked to stays linked' },
+      { name: 'list_episode_koofr_folders', description: 'The Koofr folders of an episode and of its recording session' },
+      { name: 'link_episode_koofr_folder', description: 'Link a Koofr folder to an episode, e.g. the one with its recordings' },
+      { name: 'unlink_episode_koofr_folder', description: 'Unlink a Koofr folder from an episode; the folder stays in Koofr' },
+      { name: 'list_session_koofr_folders', description: 'The Koofr folders of a recording session' },
+      { name: 'link_session_koofr_folder', description: 'Link a Koofr folder to a recording session' },
+      { name: 'unlink_session_koofr_folder', description: 'Unlink a Koofr folder from a recording session; the folder stays in Koofr' },
+    ],
+  },
+  {
+    id: 'history',
+    title: 'History',
+    about: 'who changed what, and when',
+    tools: [
+      { name: 'get_history', description: 'Every change to an episode, person, session or show, with when and by whom' },
+      { name: 'list_recent_changes', description: 'The latest changes to everything' },
+    ],
+  },
+]
