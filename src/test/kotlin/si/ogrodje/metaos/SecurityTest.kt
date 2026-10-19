@@ -76,6 +76,17 @@ class SecurityTest @Autowired constructor(private val mvc: MockMvc) {
     }
 
     @Test
+    fun `keeps probe endpoints public without details`() {
+        listOf("/livez", "/readyz").forEach { path ->
+            mvc.get(path).andExpect {
+                status { isOk() }
+                jsonPath("$.status") { value("UP") }
+                jsonPath("$.components") { doesNotExist() }
+            }
+        }
+    }
+
+    @Test
     fun `keeps prometheus endpoint public`() {
         mvc.get("/actuator/prometheus").andExpect {
             status { isOk() }

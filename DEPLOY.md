@@ -17,7 +17,8 @@ Status (2026-10-19): everything is written and verified locally. Nothing is depl
 | Keycloak                    | `https://metaos-auth.ogrodje.si`              | Own instance, realm `metaos` baked into the image and imported on first start           |
 | Postgres                    | `main-cluster` in namespace `pg`              | Databases `metaos` and `metaos_keycloak`, each owned by a role of the same name         |
 | Images                      | `registry.folk-decibel.ts.net/metaos/...`     | `metaos` and `keycloak`, tagged with `git describe`                                     |
-| Health checks and metrics   | Port 9090                                     | Never routed by the Ingress; Prometheus scrapes it through a ServiceMonitor             |
+| Actuator and metrics        | Port 9090                                     | Never routed by the Ingress; Prometheus scrapes it through a ServiceMonitor             |
+| Probes                      | `/livez`, `/readyz` on port 8080              | Public through the Ingress, but they only answer UP or DOWN                             |
 
 ### Files
 
@@ -47,9 +48,11 @@ justfile                     the same steps by hand: just push, just deploy, jus
   HTTP responses can be long-lived SSE streams.
 - **Probes.** Both Deployments have a startup probe, so Flyway migrations and Keycloak's first-start bootstrap don't
   get the pod killed. Keycloak 26.8 answers `started` and `live` while still bootstrapping and only `ready` once
-  it's done; readiness keeps traffic away until then.
-- **Graceful shutdown.** The app has a 10 s `preStop` sleep (distroless has no `sleep` binary, so this uses the
-  Kubernetes sleep action) to let ingress-nginx drop it before Spring shuts down.
+  it's done; readiness keeps traffic away until then. The app's probes use `/livez` and `/readyz` on port 8080 rather
+  than actuator on 9090: that's a second Tomcat, which would still answer UP if 8080 hung. Startup probes wait 10 s,
+  by when the ports are usually open, so a rollout doesn't log connection-refused warnings.
+- **Graceful shutdown.** Both Deployments have a 10 s `preStop` sleep (distroless has no `sleep` binary, so this uses
+  the Kubernetes sleep action) to let ingress-nginx drop the old pod before it shuts down.
 - **Resources.** Memory requests and limits, no CPU limit, as in bongbong: a CPU quota would only throttle JVM
   startup on a shared node.
 - **`set_secrets.sh` is idempotent.** It finds the CNPG primary by label, creates roles and databases only if

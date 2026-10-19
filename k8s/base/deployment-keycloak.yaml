@@ -18,6 +18,12 @@ spec:
             - { containerPort: 8080, name: http }
             - { containerPort: 9000, name: management }
 
+          # Keeps the pod serving until ingress-nginx has dropped it from its upstreams; the default 30 s grace period
+          # leaves Keycloak 20 s to stop after that
+          lifecycle:
+            preStop:
+              sleep: { seconds: 10 }
+
           envFrom:
             # KC_HOSTNAME pins the public URL, so the token issuer is the same however Keycloak is reached;
             # METAOS_MCP_URL is substituted into metaos-realm.json at import time
@@ -38,8 +44,10 @@ spec:
             - name: KEYCLOAK_DEV_PASSWORD
               valueFrom: { secretKeyRef: { name: keycloak-secret, key: keycloak_dev_password } }
 
+          # The first check waits for the ports to open (~8 s)
           startupProbe:
             httpGet: { path: /health/started, port: management }
+            initialDelaySeconds: 10
             periodSeconds: 5
             failureThreshold: 36
           livenessProbe:

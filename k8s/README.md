@@ -21,8 +21,9 @@ docker/keycloak.Dockerfile   Keycloak, optimized build, realm "metaos" baked in
 | `metaos.ogrodje.si`      | the app; `/mcp` is the MCP endpoint                                        |
 | `metaos-auth.ogrodje.si` | Keycloak; realm `metaos` issues the tokens, `/admin` is the admin console |
 
-Actuator (`/actuator/health/*`, `/actuator/prometheus`) is on port 9090, which no Ingress routes - probes and
-Prometheus reach it, the internet doesn't.
+Actuator (`/actuator/health/*`, `/actuator/prometheus`) is on port 9090, which no Ingress routes - Prometheus reaches
+it, the internet doesn't. The app's probes use `/livez` and `/readyz` on port 8080 instead, so they check the port that
+serves traffic; those two are public, but only answer UP or DOWN.
 
 ## Day to day
 
@@ -92,6 +93,6 @@ Then point an MCP client at `https://metaos.ogrodje.si/mcp`, e.g.
 - **Dynamic Client Registration allows `localhost` redirect URIs only** (the realm's Trusted Hosts policy). That
   covers Claude Code and MCP Inspector; a hosted client such as claude.ai needs its host added to that policy.
 - Every deploy rolls Keycloak too, since both images get the same tag. It's a rolling update, so the old pod serves
-  until the new one is ready.
+  until the new one is ready, and for 10 s after it's told to stop, until ingress-nginx has dropped it.
 - The registry isn't cleaned up: tags are commit hashes, which don't sort by age, so boo-run's keep-the-newest-three
   job can't be reused as is.

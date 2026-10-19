@@ -39,6 +39,8 @@ class SecurityConfig {
         .authorizeHttpRequests {
             // In k8s actuator is on its own port (MANAGEMENT_SERVER_PORT), which no Ingress routes
             it.requestMatchers("/actuator/health/**", "/actuator/prometheus").permitAll()
+            // The k8s probes, on the server port - public through the Ingress, but they only say UP or DOWN
+            it.requestMatchers("/livez", "/readyz").permitAll()
             it.requestMatchers("/mcp/**").hasAuthority("SCOPE_$MCP_SCOPE")
             it.anyRequest().authenticated()
         }

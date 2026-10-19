@@ -53,18 +53,21 @@ spec:
             - name: POSTGRES_PASSWORD
               valueFrom: { secretKeyRef: { name: metaos-secret, key: postgres_password } }
 
-          # Flyway migrates before the app is up; liveness only starts counting once this has passed
+          # On the port that serves traffic: actuator's 9090 is a second Tomcat, which says UP even when 8080 hangs.
+          # Flyway migrates before the app is up; liveness only starts counting once the startup probe has passed, and
+          # that waits for the ports to open (~8 s)
           startupProbe:
-            httpGet: { path: /actuator/health/liveness, port: management }
+            httpGet: { path: /livez, port: http }
+            initialDelaySeconds: 10
             periodSeconds: 5
             failureThreshold: 36
           livenessProbe:
-            httpGet: { path: /actuator/health/liveness, port: management }
+            httpGet: { path: /livez, port: http }
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
           readinessProbe:
-            httpGet: { path: /actuator/health/readiness, port: management }
+            httpGet: { path: /readyz, port: http }
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
