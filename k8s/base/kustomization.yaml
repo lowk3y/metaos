@@ -8,17 +8,17 @@ resources:
 # METAOS_MCP_URL only reaches Keycloak at realm import (first start) - later it has to be changed in the admin console
 # too (Client scopes -> mcp:tools -> Mappers -> metaos-mcp-audience).
 configMapGenerator:
-- name: public-urls
-  namespace: metaos-prod
-  literals:
+- literals:
   - KC_HOSTNAME=https://metaos-auth.ogrodje.si
   - KEYCLOAK_ISSUER_URI=https://metaos-auth.ogrodje.si/realms/metaos
   - METAOS_MCP_URL=https://metaos.ogrodje.si/mcp
+  name: public-urls
+  namespace: metaos-prod
 
 images:
-- name: registry.folk-decibel.ts.net/metaos/metaos
-  newTag: latest
 - name: registry.folk-decibel.ts.net/metaos/keycloak
-  newTag: latest
+  newTag: "9156827"
+- name: registry.folk-decibel.ts.net/metaos/metaos
+  newTag: "9156827"
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
