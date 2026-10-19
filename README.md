@@ -1,6 +1,6 @@
-# MetaOS
+# Ogrodje MetaOS
 
-MetaOS is a autonomous, agentic framework for managing and operating media organisations.
+MetaOS is an autonomous, agentic framework for managing and operating media organisations.
 
 MetaOS was designed for scaling, optimising and helping grow the [Ogrodje] organisation.
 
