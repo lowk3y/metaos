@@ -22,8 +22,8 @@ REGISTRY=registry.folk-decibel.ts.net
 : "${DOCKER_REGISTRY_USERNAME:?}" "${DOCKER_REGISTRY_PASSWORD:?}"
 : "${GOOGLE_CLIENT_ID:?}" "${GOOGLE_CLIENT_SECRET:?}" "${GOOGLE_DRIVE_REFRESH_TOKEN:?}"
 
-cd "$(dirname "$0")"
-kubectl apply -f base/namespace.yaml
+# No cd: KUBECONFIG may be relative to where this runs, as .envrc's is
+kubectl apply -f "$(dirname "$0")/base/namespace.yaml"
 
 # Roles and databases - names as in base/deployment-*.yaml. Each role owns its database, so the app's
 # `CREATE EXTENSION citext` (V1__init.sql) works: citext is a trusted extension.
