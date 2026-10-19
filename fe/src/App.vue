@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {ref, watch} from 'vue'
 import {RouterLink, RouterView} from 'vue-router'
-import {faDiscord, faGoogle} from '@fortawesome/free-brands-svg-icons'
+import {faDiscord, faGithub, faGoogle} from '@fortawesome/free-brands-svg-icons'
 import {FontAwesomeIcon} from '@fortawesome/vue-fontawesome'
 import {graphql} from '@/graphql'
 import {useAuthStore} from '@/stores/auth'
@@ -59,7 +59,24 @@ watch(() => auth.authenticated, async (authenticated) => {
     </div>
   </header>
 
-  <RouterView/>
+  <!-- Takes the height the header and footer leave, so the footer stays at the bottom of short pages -->
+  <div class="page">
+    <RouterView/>
+  </div>
+
+  <footer>
+    <div class="wrapper">
+      <span class="name">Ogrodje MetaOS</span>
+      <nav class="elsewhere" aria-label="Ogrodje elsewhere">
+        <a class="icon-link" href="https://github.com/ogrodje/metaos" title="MetaOS on GitHub" aria-label="MetaOS on GitHub">
+          <FontAwesomeIcon :icon="faGithub"/>
+        </a>
+        <a class="icon-link" href="https://discord.gg/xV2Xc4VX9W" title="Ogrodje on Discord" aria-label="Ogrodje on Discord">
+          <FontAwesomeIcon :icon="faDiscord"/>
+        </a>
+      </nav>
+    </div>
+  </footer>
 </template>
 
 <style scoped lang="scss">
@@ -126,6 +143,47 @@ header {
   @media (max-width: 640px) {
     .name, .long {
       display: none;
+    }
+  }
+}
+
+:global(#app) {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.page {
+  flex: 1;
+}
+
+// The header's container, without its line
+footer {
+  .wrapper {
+    max-width: var(--content-width);
+    min-height: 64px;
+    margin: 0 auto;
+    padding: 0 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 24px;
+  }
+
+  .name {
+    font-size: 13px;
+    line-height: 20px;
+    color: var(--muted);
+  }
+
+  .elsewhere {
+    display: flex;
+    gap: 4px;
+    // The glyphs, not their 32 px hit areas, line up with the content's edge
+    margin-right: -8px;
+
+    a {
+      color: var(--secondary);
     }
   }
 }
