@@ -6,6 +6,7 @@ import org.hibernate.annotations.SoftDeleteType
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
+import java.net.URI
 import java.util.UUID
 
 @Entity
@@ -21,9 +22,48 @@ class Person(
     var id: UUID? = null
         protected set
 
+    // A line about who they are, e.g. their role and company
+    @Column(columnDefinition = "text") var bio: String? = null
+
+    @Column(columnDefinition = "text") var homepageUrl: String? = null
+    @Column(columnDefinition = "text") var linkedinUrl: String? = null
+    @Column(columnDefinition = "text") var twitterUrl: String? = null
+    @Column(columnDefinition = "text") var instagramUrl: String? = null
+    @Column(columnDefinition = "text") var facebookUrl: String? = null
+
+    fun setSocialLink(network: SocialNetwork, url: String?) {
+        require(url == null || network.accepts(url)) { "$url is not a $network URL" }
+        when (network) {
+            SocialNetwork.HOMEPAGE -> homepageUrl = url
+            SocialNetwork.LINKEDIN -> linkedinUrl = url
+            SocialNetwork.TWITTER -> twitterUrl = url
+            SocialNetwork.INSTAGRAM -> instagramUrl = url
+            SocialNetwork.FACEBOOK -> facebookUrl = url
+        }
+    }
+
     override fun equals(other: Any?) = this === other || (other is Person && id != null && id == other.id)
     override fun hashCode() = javaClass.hashCode()
     override fun toString() = "Person(id=$id, name=$name)"
+}
+
+/**
+ * Where a person can be found online. A homepage can be any http or https URL; the others have to be https URLs on the
+ * network's domain or a subdomain of it (www.linkedin.com, si.linkedin.com, ...).
+ */
+enum class SocialNetwork(private vararg val domains: String) {
+    HOMEPAGE,
+    LINKEDIN("linkedin.com"),
+    TWITTER("twitter.com", "x.com"),
+    INSTAGRAM("instagram.com"),
+    FACEBOOK("facebook.com");
+
+    fun accepts(url: String): Boolean {
+        val uri = runCatching { URI(url) }.getOrNull() ?: return false
+        val host = uri.host ?: return false
+        return if (domains.isEmpty()) uri.scheme in setOf("http", "https")
+        else uri.scheme == "https" && domains.any { host == it || host.endsWith(".$it") }
+    }
 }
 
 enum class Role { HOST, CO_HOST, GUEST, PRODUCER, CONSULTANT, DESIGNER }

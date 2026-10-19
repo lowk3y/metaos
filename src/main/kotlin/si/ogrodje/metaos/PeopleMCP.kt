@@ -7,11 +7,22 @@ import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
 
-data class PersonDto(val id: UUID?, val name: String, val email: String?)
+data class PersonDto(
+    val id: UUID?,
+    val name: String,
+    val email: String?,
+    val bio: String? = null,
+    val homepageUrl: String? = null,
+    val linkedinUrl: String? = null,
+    val twitterUrl: String? = null,
+    val instagramUrl: String? = null,
+    val facebookUrl: String? = null,
+)
 data class PersonEpisodeDto(val episodeId: UUID?, val code: String?, val title: String, val roles: List<Role>)
 data class CurrentUserDto(val username: String?, val email: String?, val emailVerified: Boolean, val person: PersonDto?)
 
-private fun Person.toDto() = PersonDto(id, name, email)
+private fun Person.toDto() =
+    PersonDto(id, name, email, bio, homepageUrl, linkedinUrl, twitterUrl, instagramUrl, facebookUrl)
 // One entry per episode, with all of the person's roles on it
 private fun List<EpisodePerson>.toPersonEpisodeDtos(): List<PersonEpisodeDto> =
     groupBy { it.episode.id }.values.map { assignments ->
@@ -52,6 +63,32 @@ class PeopleMCP(
             "Person with email $email already exists"
         }
         person.email = email
+        return person.toDto()
+    }
+
+    @Transactional
+    @McpTool(name = "set_person_bio", description = "Set or clear the line about who a person is, e.g. their role and company")
+    fun setBio(
+        @McpToolParam(description = "Person ID") personId: UUID,
+        @McpToolParam(description = "Bio, e.g. \"CTO @ Koofr\"; omit or empty to clear", required = false) bio: String?,
+    ): PersonDto {
+        val person = requireNotNull(people.findByIdOrNull(personId)) { "Person $personId not found" }
+        person.bio = bio?.trim()?.ifEmpty { null }
+        return person.toDto()
+    }
+
+    @Transactional
+    @McpTool(
+        name = "set_person_link",
+        description = "Set or clear where a person can be found online: their homepage, LinkedIn, Twitter/X, Instagram or Facebook"
+    )
+    fun setLink(
+        @McpToolParam(description = "Person ID") personId: UUID,
+        @McpToolParam(description = "Personal website or social network the link points to") network: SocialNetwork,
+        @McpToolParam(description = "URL of the person's page there (https, except a homepage); omit to clear", required = false) url: String?,
+    ): PersonDto {
+        val person = requireNotNull(people.findByIdOrNull(personId)) { "Person $personId not found" }
+        person.setSocialLink(network, url?.trim()?.ifEmpty { null })
         return person.toDto()
     }
 

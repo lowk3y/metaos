@@ -43,6 +43,37 @@ class PeopleTest @Autowired constructor(
     }
 
     @Test
+    fun `sets and clears a person's bio and links, only to the right sites`() {
+        val person = peopleMCP.create(name = "Andraž Vrhovec", email = null).id!!
+
+        peopleMCP.setBio(person, "  CTO @ Koofr ")
+        peopleMCP.setLink(person, SocialNetwork.HOMEPAGE, "http://andraz.example")
+        peopleMCP.setLink(person, SocialNetwork.LINKEDIN, "https://si.linkedin.com/in/andraz")
+        peopleMCP.setLink(person, SocialNetwork.TWITTER, "https://x.com/andraz")
+        peopleMCP.setLink(person, SocialNetwork.INSTAGRAM, "https://www.instagram.com/andraz")
+        val linked = peopleMCP.setLink(person, SocialNetwork.FACEBOOK, "https://www.facebook.com/andraz")
+        assertEquals(
+            PersonDto(
+                person, "Andraž Vrhovec", null, "CTO @ Koofr", "http://andraz.example", "https://si.linkedin.com/in/andraz",
+                "https://x.com/andraz", "https://www.instagram.com/andraz", "https://www.facebook.com/andraz",
+            ),
+            linked,
+        )
+        assertEquals(linked, peopleMCP.list().single { it.id == person })
+
+        assertFailsWith<IllegalArgumentException> { peopleMCP.setLink(person, SocialNetwork.LINKEDIN, "http://www.linkedin.com/in/andraz") }
+        assertFailsWith<IllegalArgumentException> { peopleMCP.setLink(person, SocialNetwork.TWITTER, "https://notlinkedin.com/andraz") }
+        assertFailsWith<IllegalArgumentException> { peopleMCP.setLink(person, SocialNetwork.TWITTER, "andraz") }
+        assertFailsWith<IllegalArgumentException> { peopleMCP.setLink(person, SocialNetwork.HOMEPAGE, "ftp://andraz.example") }
+        assertFailsWith<IllegalArgumentException> { peopleMCP.setBio(UUID.randomUUID(), "Nobody") }
+
+        peopleMCP.setBio(person, "")
+        val cleared = peopleMCP.setLink(person, SocialNetwork.TWITTER, null)
+        assertEquals(null to null, cleared.bio to cleared.twitterUrl)
+        assertEquals("https://www.facebook.com/andraz", cleared.facebookUrl)
+    }
+
+    @Test
     fun `gives a person several roles on an episode, each once`() {
         episodesRepository.saveAndFlush(Episode(title = "Roles", code = "ep-401"))
         val person = peopleMCP.create(name = "Host Person", email = "host@ogrodje.si")
