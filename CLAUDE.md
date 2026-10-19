@@ -77,6 +77,9 @@ replaces anything unasked.
 - `KOOFR_EMAIL` and `KOOFR_APP_PASSWORD` (`.envrc`) turn it on; it's off without the app password, which is made at
   https://app.koofr.net/app/admin/preferences/password while signed in as the bot. In production the email is in
   `metaos-config` and the app password in `metaos-secret` (`k8s/set_secrets.sh`).
+- `KoofrFoldersMCP` links folders to episodes and recording sessions (`episode_koofr_folders`,
+  `session_koofr_folders`). Koofr has no file IDs, so a link is a place (mount ID) and a path: moves through
+  `move_koofr_file` take the links along, while a folder moved in the Koofr app leaves its links listed as missing.
 - The `koofr` health check uses it every hour and reports a rejected password there, in `metaos_koofr_connected` and in
   the log. `KoofrTest` runs against the real account (read-only) when the app password is in the environment.
 

@@ -2,7 +2,9 @@ package si.ogrodje.metaos
 
 import org.springframework.ai.mcp.annotation.McpTool
 import org.springframework.ai.mcp.annotation.McpToolParam
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Component
+import org.springframework.transaction.annotation.Transactional
 import java.net.URLConnection
 import java.util.Base64
 
@@ -30,16 +32,21 @@ fun koofrPath(path: String?): String {
     return "/" + parts.joinToString("/")
 }
 
+/** A place by ID or name - only folders shared with the bot, not its own Koofr space */
+fun Koofr.sharedPlace(ref: String): KoofrPlace {
+    val places = places()
+    return places.firstOrNull { it.id == ref } ?: places.firstOrNull { it.name.equals(ref.trim(), ignoreCase = true) }
+        ?: throw IllegalArgumentException("$ref isn't a folder shared with the bot; there's ${places.joinToString { it.name }.ifEmpty { "none" }}")
+}
+
+/** A file or folder moved through MetaOS, so that what's linked to it can follow (KoofrFoldersMCP) */
+data class KoofrMoved(val fromPlace: String, val fromPath: String, val toPlace: String, val toPath: String)
+
 @Component
 @ConditionalOnKoofr
-class KoofrMCP(private val koofr: Koofr) {
+class KoofrMCP(private val koofr: Koofr, private val events: ApplicationEventPublisher) {
 
-    // Only folders shared with the bot, not its own Koofr space
-    private fun place(ref: String): KoofrPlace {
-        val places = koofr.places()
-        return places.firstOrNull { it.id == ref } ?: places.firstOrNull { it.name.equals(ref.trim(), ignoreCase = true) }
-            ?: throw IllegalArgumentException("$ref isn't a folder shared with the bot; there's ${places.joinToString { it.name }.ifEmpty { "none" }}")
-    }
+    private fun place(ref: String) = koofr.sharedPlace(ref)
 
     private fun writablePlace(ref: String) = place(ref).also { require(it.writable) { "${it.name} is shared with the bot read-only" } }
 
@@ -123,9 +130,12 @@ class KoofrMCP(private val koofr: Koofr) {
         return requireNotNull(koofr.file(placeId, koofrPath("$parentPath/$name")))
     }
 
+    // Transactional, so that the episodes' and sessions' links follow the move in the same transaction
+    @Transactional
     @McpTool(
         name = "move_koofr_file",
-        description = "Move or rename a file or folder in Koofr, also into another shared folder. Never replaces what's at the new path"
+        description = "Move or rename a file or folder in Koofr, also into another shared folder. Never replaces what's at the " +
+            "new path. Folders linked to episodes or sessions stay linked"
     )
     fun move(
         @McpToolParam(description = KOOFR_PLACE) place: String,
@@ -140,6 +150,7 @@ class KoofrMCP(private val koofr: Koofr) {
         requireNotNull(koofr.file(from, source)) { "There's no $path in Koofr" }
         require(koofr.file(into, target) == null) { "$to is already there" }
         koofr.move(from, source, into, target)
+        events.publishEvent(KoofrMoved(from, source, into, target))
         return requireNotNull(koofr.file(into, target))
     }
 }

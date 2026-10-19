@@ -42,9 +42,13 @@ class FakeKoofr : Koofr {
 
     override fun createFolder(place: String, parent: String, name: String) = put(place, "${parent.trimEnd('/')}/$name", null, null)
 
+    // A folder takes what's in it along
     override fun move(place: String, path: String, toPlace: String, toPath: String) {
-        val (file, content) = files.remove(place to path)!!
-        files[toPlace to toPath] = file.copy(place = toPlace, path = toPath, name = toPath.substringAfterLast('/')) to content
+        files.keys.filter { (at, p) -> at == place && (p == path || p.startsWith("$path/")) }.forEach { key ->
+            val (file, content) = files.remove(key)!!
+            val moved = toPath + key.second.removePrefix(path)
+            files[toPlace to moved] = file.copy(place = toPlace, path = moved, name = moved.substringAfterLast('/')) to content
+        }
     }
 }
 
@@ -61,7 +65,7 @@ class KoofrTest {
         // The bot's own space, which isn't shared with it
         put("mount-own", "/S05E08 private.md", "private".toByteArray())
     }
-    private val mcp = KoofrMCP(koofr)
+    private val mcp = KoofrMCP(koofr) {}
 
     @Test
     fun `normalises paths and refuses to climb out of them`() {
