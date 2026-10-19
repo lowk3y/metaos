@@ -19,6 +19,8 @@ data:
   METAOS_DRIVE_ROOT_FOLDER_ID: "1euKNkdlCpB2F5n77jvpJ4cRFtdvtS-Ff"
   # The bot's Koofr account; its app password is in metaos-secret (Koofr.kt)
   KOOFR_EMAIL: "iva.ogrodje@gmail.com"
+  # MetaOS's files (Storage.kt); the key of the service account that may use it is in metaos-secret (google/storage.sh)
+  METAOS_STORAGE_BUCKET: "ogrodje-metaos-prod"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -68,6 +70,9 @@ spec:
             # Koofr is off without it
             - name: KOOFR_APP_PASSWORD
               valueFrom: { secretKeyRef: { name: metaos-secret, key: koofr_app_password, optional: true } }
+            # Cloud Storage is off without it
+            - name: GOOGLE_STORAGE_KEY
+              valueFrom: { secretKeyRef: { name: metaos-secret, key: google_storage_key, optional: true } }
 
           # On the port that serves traffic: actuator's 9090 is a second Tomcat, which says UP even when 8080 hangs.
           # Flyway migrates before the app is up; liveness only starts counting once the startup probe has passed, and

@@ -103,6 +103,29 @@ Google revokes tokens with Gmail access when the account's password changes, and
 - `GoogleDriveTest` and `GmailTest` run against the real account when its credentials are in the environment; Gmail's
   only makes and deletes a draft.
 
+### Google Cloud Storage
+
+MetaOS's own files (pictures, videos, anything) are in Google Cloud Storage, in project `ogrodje-metaos`, through
+[`Storage.kt`](src/main/kotlin/si/ogrodje/metaos/Storage.kt). Unlike Drive and Gmail, this isn't the bot account: each
+environment has its own bucket and its own service account, which can use only that bucket.
+[`google/storage.sh`](google/storage.sh) `setup` creates them (it's idempotent) and `key dev|prod` makes the keys;
+gcloud comes from the devenv shell.
+
+| Bucket                | Service account       | For                                                                   |
+|-----------------------|-----------------------|-----------------------------------------------------------------------|
+| `ogrodje-metaos-dev`  | `metaos-storage-dev`  | development and tests; `test/` is emptied after a day; no soft delete |
+| `ogrodje-metaos-prod` | `metaos-storage-prod` | production; deleted and replaced files are kept 30 days; Autoclass    |
+
+- Both are in Frankfurt (`europe-west3`) and private. MetaOS hands out signed URLs instead, which it signs with the key
+  itself: `uploadUrl` starts a resumable upload, so big videos go from the browser straight to the bucket, without
+  MetaOS in between. The buckets' CORS allows that from the front-end's origins.
+- `GOOGLE_STORAGE_KEY` (the service account's JSON key, on one line) and `METAOS_STORAGE_BUCKET` (`.envrc`) turn it on;
+  it's off without the key. In production the key is in `metaos-secret` (`PROD_GOOGLE_STORAGE_KEY`,
+  `k8s/set_secrets.sh`) and the bucket in `metaos-config`.
+- Keys don't expire. The `storage` health check uses the key every hour and reports a deleted one there, in
+  `metaos_storage_connected` and in the log.
+- `GoogleCloudStorageTest` runs against the dev bucket when its key is in the environment, under `test/`.
+
 ### Koofr
 
 MetaOS also uses the bot account in Koofr ([`Koofr.kt`](src/main/kotlin/si/ogrodje/metaos/Koofr.kt)), through

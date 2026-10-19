@@ -45,6 +45,8 @@ in {
     pkgs.kubernetes-helm
     pkgs.kustomize
     pkgs.just
+    # gcloud, for google/storage.sh
+    pkgs.google-cloud-sdk
   ];
 
   env = {

@@ -75,6 +75,8 @@ dependencies {
     implementation("com.google.auth:google-auth-library-oauth2-http:1.54.0")
     implementation("com.google.apis:google-api-services-drive:v3-rev20261011-2.0.0")
     implementation("com.google.apis:google-api-services-gmail:v1-rev20261005-2.0.0")
+    // Google Cloud Storage, as a service account per environment (Storage.kt)
+    implementation("com.google.cloud:google-cloud-storage:2.75.0")
 
     // Koofr, as Ogrodje's bot account (Koofr.kt)
     implementation("com.github.koofr:java-koofr:3.8.10")
