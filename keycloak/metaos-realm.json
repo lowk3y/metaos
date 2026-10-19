@@ -797,7 +797,9 @@
         "config": {
           "trusted-hosts": [
             "localhost",
-            "127.0.0.1"
+            "127.0.0.1",
+            "claude.ai",
+            "claude.com"
           ],
           "host-sending-registration-request-must-match": [
             "false"
