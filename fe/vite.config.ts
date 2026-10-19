@@ -5,6 +5,9 @@ import vue from '@vitejs/plugin-vue'
 import vueJsx from '@vitejs/plugin-vue-jsx'
 import vueDevTools from 'vite-plugin-vue-devtools'
 
+// MetaOS, which the dev server passes the API on to; METAOS_URL points it at another instance than the one on :8080
+const metaos = process.env.METAOS_URL ?? 'http://localhost:8080'
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
@@ -18,10 +21,10 @@ export default defineConfig({
     },
   },
   server: {
-    // MetaOS on :8080; through the proxy the browser sees one origin, as in production, where MetaOS serves fe/
+    // Through the proxy the browser sees one origin, as in production, where MetaOS serves fe/
     proxy: {
-      '/graphql': 'http://localhost:8080',
-      '/config.json': 'http://localhost:8080',
+      '/graphql': metaos,
+      '/config.json': metaos,
     },
   },
 })

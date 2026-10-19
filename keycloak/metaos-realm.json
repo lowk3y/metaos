@@ -59,6 +59,75 @@
           }
         }
       ]
+    },
+    {
+      "name": "metaos:read",
+      "description": "Read MetaOS through its GraphQL API",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "metaos-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "${METAOS_API_URL:http://localhost:8080/graphql}",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true",
+            "id.token.claim": "false",
+            "lightweight.claim": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "metaos:write",
+      "description": "Change MetaOS through its GraphQL API",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "metaos-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "${METAOS_API_URL:http://localhost:8080/graphql}",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true",
+            "id.token.claim": "false",
+            "lightweight.claim": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "metaos-ui",
+      "name": "MetaOS",
+      "description": "The front-end (fe/), signing users in with keycloak-js",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["${METAOS_UI_URL:http://localhost:5173}/*"],
+      "webOrigins": ["${METAOS_UI_URL:http://localhost:5173}"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "+"
+      },
+      "defaultClientScopes": ["basic", "acr", "web-origins", "profile", "email", "roles", "metaos:read", "metaos:write"],
+      "optionalClientScopes": []
     }
   ],
   "components": {

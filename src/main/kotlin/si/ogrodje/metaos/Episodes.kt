@@ -3,6 +3,7 @@ package si.ogrodje.metaos
 import jakarta.persistence.*
 import org.hibernate.annotations.SoftDelete
 import org.hibernate.annotations.SoftDeleteType
+import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
@@ -115,6 +116,10 @@ interface EpisodesRepository : JpaRepository<Episode, UUID> {
     // Codes are zero-padded (S05E05), so descending puts the latest season and episode first; ideas without one last
     @Query("select e from Episode e order by e.code desc nulls last")
     fun findLatestFirst(): List<Episode>
+
+    // The most recently aired first; those without an aired date after them, by code
+    @Query("select e from Episode e where e.status = :status order by e.airedDate desc nulls last, e.code desc nulls last")
+    fun findLatestAiredByStatus(status: EpisodeStatus, pageable: Pageable): List<Episode>
 
     @Query("select e from Episode e where e.status = :status order by e.code desc nulls last")
     fun findLatestFirstByStatus(status: EpisodeStatus): List<Episode>

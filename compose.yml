@@ -49,6 +49,8 @@ services:
       - KC_HEALTH_ENABLED=true
       # Substituted into metaos-realm.json at import time
       - METAOS_MCP_URL=${METAOS_MCP_URL:-http://localhost:8080/mcp}
+      - METAOS_API_URL=${METAOS_API_URL:-http://localhost:8080/graphql}
+      - METAOS_UI_URL=${METAOS_UI_URL:-http://localhost:5173}
       - KEYCLOAK_DEV_PASSWORD=${KEYCLOAK_DEV_PASSWORD:-dev}
     ports:
       - '127.0.0.1:8180:8080'

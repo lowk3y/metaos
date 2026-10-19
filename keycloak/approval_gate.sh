@@ -1,6 +1,6 @@
-# Sourced by the identity provider scripts (discord_idp.sh, google_idp.sh): an admin token for realm metaos, `api` for
-# its admin API, `approval_gate` for the post-login flow that keeps a provider's logins out until they're approved, and
-# `upsert_idp`.
+# Sourced by the identity provider scripts (discord_idp.sh, google_idp.sh) and frontend_client.sh: an admin token for
+# realm metaos, `api` for its admin API, `approval_gate` for the post-login flow that keeps a provider's logins out until
+# they're approved, and `upsert_idp`.
 #
 # Anyone with a Discord or Google account can sign in, and every user of the realm may use every MCP tool - so each
 # provider's post-login flow denies its logins until an admin grants the user the realm role "metaos-user".

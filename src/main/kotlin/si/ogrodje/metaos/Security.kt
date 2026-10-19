@@ -44,8 +44,11 @@ class SecurityConfig {
             // The k8s probes, on the server port - public through the Ingress, but they only say UP or DOWN
             it.requestMatchers("/livez", "/readyz").permitAll()
             it.requestMatchers("/mcp/**").hasAuthority("SCOPE_$MCP_SCOPE")
+            // Anyone may ask for what's public, e.g. the released episodes; the rest needs a token (GraphQL.kt)
+            it.requestMatchers("/graphql").permitAll()
             // The front-end (Frontend.kt): its files and pages are public - its data comes from the API, with a token
-            it.requestMatchers(HttpMethod.GET, "/assets/**", "/favicon.ico", "/config.json").permitAll()
+            it.requestMatchers(HttpMethod.GET, "/assets/**", "/favicon.ico", "/silent-check-sso.html", "/config.json")
+                .permitAll()
             it.requestMatchers(frontendPage).permitAll()
             // The error page of a request let in, e.g. a missing asset's 404, which would otherwise become a 401
             it.dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
@@ -54,6 +57,9 @@ class SecurityConfig {
         // Bearer tokens only - no cookies, so no CSRF and no HTTP sessions
         .csrf { it.disable() }
         .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
+        // keycloak-js asks Keycloak whether the user is signed in through a hidden iframe of the front-end's
+        // silent-check-sso.html, so MetaOS's pages may be framed - by MetaOS itself only
+        .headers { headers -> headers.frameOptions { it.sameOrigin() } }
         .with(mcpServerOAuth2()) { mcp ->
             mcp.authorizationServer(issuerUri)
             mcp.jwtDecoder(jwtDecoder)

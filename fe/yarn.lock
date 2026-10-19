@@ -1361,6 +1361,7 @@ __metadata:
     "@vitejs/plugin-vue-jsx": "npm:^5.1.6"
     "@vue/devtools-api": "npm:^8.2.1"
     "@vue/tsconfig": "npm:^0.9.1"
+    keycloak-js: "npm:^26.2.4"
     npm-run-all2: "npm:^9.0.3"
     pinia: "npm:^4.0.3"
     sass-embedded: "npm:^1.105.2"
@@ -1522,6 +1523,13 @@ __metadata:
   bin:
     json5: lib/cli.js
   checksum: 10c0/5a04eed94810fa55c5ea138b2f7a5c12b97c3750bc63d11e511dcecbfef758003861522a070c2272764ee0f4e3e323862f386945aeb5b85b87ee43f084ba586c
+  languageName: node
+  linkType: hard
+
+"keycloak-js@npm:^26.2.4":
+  version: 26.2.4
+  resolution: "keycloak-js@npm:26.2.4"
+  checksum: 10c0/ad1f3e7c07b6b84fd805129e21aefe94b32e48ecdde1c586294720712c0971ff4c49613c025476d30dbff22e5d61a4fc4d294050d5f11e1ecc0646bef2f02311
   languageName: node
   linkType: hard
 

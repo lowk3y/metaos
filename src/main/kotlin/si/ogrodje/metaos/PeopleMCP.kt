@@ -3,6 +3,7 @@ package si.ogrodje.metaos
 import org.springframework.ai.mcp.annotation.McpTool
 import org.springframework.ai.mcp.annotation.McpToolParam
 import org.springframework.data.repository.findByIdOrNull
+import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
@@ -23,6 +24,15 @@ data class CurrentUserDto(val username: String?, val email: String?, val emailVe
 
 private fun Person.toDto() =
     PersonDto(id, name, email, bio, homepageUrl, linkedinUrl, twitterUrl, instagramUrl, facebookUrl)
+
+/** The user a token belongs to, with the person linked to them by verified email */
+fun Jwt.toCurrentUserDto(people: PeopleRepository) = CurrentUserDto(
+    username = getClaimAsString("preferred_username"),
+    email = getClaimAsString("email"),
+    emailVerified = getClaimAsBoolean("email_verified") == true,
+    person = verifiedEmail?.let(people::findByEmail)?.toDto(),
+)
+
 // One entry per episode, with all of the person's roles on it
 private fun List<EpisodePerson>.toPersonEpisodeDtos(): List<PersonEpisodeDto> =
     groupBy { it.episode.id }.values.map { assignments ->
@@ -110,15 +120,7 @@ class PeopleMCP(
 
     @Transactional(readOnly = true)
     @McpTool(name = "whoami", description = "Show the signed-in user and the person linked to them by verified email")
-    fun whoami(): CurrentUserDto {
-        val jwt = checkNotNull(currentJwt()) { "Not signed in" }
-        return CurrentUserDto(
-            username = jwt.getClaimAsString("preferred_username"),
-            email = jwt.getClaimAsString("email"),
-            emailVerified = jwt.getClaimAsBoolean("email_verified") == true,
-            person = jwt.verifiedEmail?.let(people::findByEmail)?.toDto(),
-        )
-    }
+    fun whoami(): CurrentUserDto = checkNotNull(currentJwt()) { "Not signed in" }.toCurrentUserDto(people)
 
     @Transactional(readOnly = true)
     @McpTool(name = "my_episodes", description = "List the episodes the signed-in user is on and their roles in each, latest first")

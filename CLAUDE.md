@@ -32,6 +32,12 @@ yarn build      # type-check (vue-tsc) and build into fe/dist
   its data needs a token. Runs and tests don't build `fe/`.
 - `/config.json` tells the front-end where users sign in (the Keycloak issuer) and as which client
   (`metaos.frontend.client-id`), so one build works in every environment.
+- Data comes from the GraphQL API at `/graphql` ([`schema.graphqls`](src/main/resources/graphql/schema.graphqls),
+  [`GraphQL.kt`](src/main/kotlin/si/ogrodje/metaos/GraphQL.kt)), through `fe/src/graphql.ts`. It's open to anyone, as
+  some of it is public (`releasedEpisodes`); a bearer token says who is asking (`me`).
+- Users sign in with keycloak-js (`fe/src/stores/auth.ts`), straight to Discord or Google (`idpHint`). On load it
+  checks for a Keycloak session in a hidden iframe of `fe/public/silent-check-sso.html`, which is why MetaOS's pages
+  may be framed by MetaOS itself (`X-Frame-Options: SAMEORIGIN`).
 
 ### Authentication (Keycloak)
 
@@ -47,9 +53,16 @@ docker compose up -d keycloak   # http://localhost:8180 (admin console: admin / 
 - MCP clients (Claude Code, MCP Inspector, ...) discover Keycloak via `/.well-known/oauth-protected-resource/mcp`,
   register themselves with Dynamic Client Registration (`localhost` redirect URIs only) and log the user in.
 - Tokens need the `mcp:tools` scope; it also puts the MCP URL into `aud`, which the server checks.
+- The front-end signs users in as `metaos-ui`, a public client with PKCE. Its tokens carry `metaos:read` and
+  `metaos:write`, which put the `/graphql` URL into `aud` (and don't get them into `/mcp`). They're the client's own
+  scopes, not realm defaults, as MCP clients registering themselves could ask for any realm default.
+  [`keycloak/frontend_client.sh`](keycloak/frontend_client.sh) sets them up in a realm imported without them, e.g.
+  production's (`METAOS_UI_URL` and `METAOS_API_URL` default to production's).
 - Dev login: `dev` / `dev`.
-- `METAOS_MCP_URL` (default `http://localhost:8080/mcp`) must be the public URL of `/mcp`; it is used by both Keycloak
-  (token audience) and the app (audience check). `KEYCLOAK_ISSUER_URI` points the app at another realm.
+- `METAOS_MCP_URL` (default `http://localhost:8080/mcp`) and `METAOS_API_URL` (default
+  `http://localhost:8080/graphql`) must be the public URLs of `/mcp` and `/graphql`; they are used by both Keycloak
+  (token audience) and the app (audience check). `METAOS_UI_URL` (default `http://localhost:5173`) is where the
+  front-end is, for `metaos-ui`'s redirect URIs. `KEYCLOAK_ISSUER_URI` points the app at another realm.
 - The realm is only imported when it doesn't exist yet. To re-import after editing the JSON (wipes all Keycloak data,
   including registered MCP clients):
 

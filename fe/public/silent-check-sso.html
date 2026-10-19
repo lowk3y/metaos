@@ -1,0 +1,9 @@
+<!DOCTYPE html>
+<!-- keycloak-js loads this in a hidden iframe to find out whether the user is signed in to Keycloak (src/stores/auth.ts) -->
+<html>
+  <body>
+    <script>
+      parent.postMessage(location.href, location.origin)
+    </script>
+  </body>
+</html>

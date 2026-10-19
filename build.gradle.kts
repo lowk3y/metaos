@@ -41,6 +41,9 @@ dependencies {
     implementation("org.springframework.ai:spring-ai-starter-mcp-server-webmvc")
     // implementation("org.springframework.boot:spring-boot-starter-mustache")
 
+    // GraphQL at /graphql, for the front-end (GraphQL.kt)
+    implementation("org.springframework.boot:spring-boot-starter-graphql")
+
     implementation("tools.jackson.module:jackson-module-kotlin")
 
     // Security - MCP endpoint is an OAuth2 resource server, Keycloak is the authorization server

@@ -165,6 +165,26 @@ Google provider. The role, the post-login flows and the admin API helpers are sh
 - Verified on a throwaway Keycloak 26.8.1: both scripts create the same flow structure and are idempotent, and the
   Google button redirects to `accounts.google.com/o/oauth2/v2/auth` with scope `openid profile email`.
 
+## Front-end sign-in
+
+The front-end signs users in with keycloak-js as client `metaos-ui`, and its "Sign in with Discord/Google" buttons go
+straight to the identity provider (`idpHint`), so the approval gates above apply to it as they do to MCP clients.
+`metaos-ui` and its scopes `metaos:read` and `metaos:write`, which put `/graphql` into the tokens' audience, are in the
+realm JSON for new realms; [`keycloak/frontend_client.sh`](keycloak/frontend_client.sh) adds them to an existing one:
+
+```bash
+keycloak/frontend_client.sh   # as the IdP scripts: KEYCLOAK_ADMIN_USERNAME and KEYCLOAK_ADMIN_PASSWORD from .envrc
+```
+
+Production has it (2026-10-19).
+
+- **Public client with PKCE.** A browser can't keep a secret. Redirect URIs and web origins are `METAOS_UI_URL` only.
+- **Not realm defaults.** The scopes are assigned to `metaos-ui` alone: clients that register themselves (DCR) may
+  ask for any realm default scope. Its tokens don't carry `mcp:tools` either, so they don't get into `/mcp`.
+- Verified on a throwaway Keycloak 26.8.1 (the realm import, and the script creating and updating) and in dev: a real
+  `metaos-ui` token has `/graphql` in `aud`, a login without PKCE is refused, `check-sso` finds an existing Keycloak
+  session, signing out comes back to the front-end, and the Google button goes straight to Google.
+
 ## Next steps
 
 1. [ ] **DNS.** Add `metaos.ogrodje.si` and `metaos-auth.ogrodje.si` as proxied Cloudflare CNAMEs to

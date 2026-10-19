@@ -1,0 +1,40 @@
+# MetaOS's GraphQL API (GraphQL.kt), at /graphql. Anyone may query what's public, like the released episodes; the
+# rest will need a token from Keycloak with metaos:read, and changes one with metaos:write.
+
+type Query {
+    "The latest released (PUBLISHED) episodes, the most recently aired first; at most 20"
+    releasedEpisodes(limit: Int! = 3): [Episode!]!
+
+    "The signed-in user, from the bearer token; null without one"
+    me: CurrentUser
+}
+
+type Episode {
+    id: ID!
+    "e.g. S05E08"
+    code: String
+    title: String!
+    "The show it's part of"
+    show: String
+    "When it was released, e.g. 2026-10-19"
+    airedDate: String
+    "Description of the episode, in Markdown"
+    summary: String
+    youtubeUrl: String
+    spotifyUrl: String
+    applePodcastsUrl: String
+    patreonUrl: String
+}
+
+type CurrentUser {
+    username: String
+    email: String
+    emailVerified: Boolean!
+    "The person linked to the user by verified email"
+    person: Person
+}
+
+type Person {
+    id: ID!
+    name: String!
+}
