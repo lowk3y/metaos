@@ -1,13 +1,12 @@
 name: Build and Deploy
 
-# Tests, builds both images and rolls them out to metaos-prod. Same shape as boo-run's deploy-master.yml and
-# bongbong's deploy-rooms.yml: the private registry and the API server are reached over Tailscale as tag:ci.
+# Tests, builds both images and rolls them out to metaos-prod. The private registry and the API server are reached
+# over Tailscale as tag:ci.
 #
-# Repo secrets - the names boo-run and bongbong use, so one set covers all three:
+# Repo secrets:
 #   TS_OAUTH_CLIENT_ID / TS_OAUTH_SECRET                Tailscale OAuth client for tag:ci
 #   DOCKER_REGISTRY_USERNAME / DOCKER_REGISTRY_PASSWORD  the registry
 #   KUBECONFIG                                           base64 of the Tailscale operator kubeconfig (k8s/README.md)
-#   PUSHOVER_TOKEN / PUSHOVER_USER                       optional; the notification is skipped without them
 
 on:
   push:
@@ -95,7 +94,7 @@ jobs:
 
       - name: Setup kustomize
         run: |
-          # Pinned release binary, as in boo-run and bongbong
+          # Pinned release binary
           KVER=5.4.3
           curl -sSL -o /tmp/kustomize.tar.gz \
             "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv${KVER}/kustomize_v${KVER}_linux_amd64.tar.gz"
@@ -151,27 +150,3 @@ jobs:
             echo "::error::/actuator/prometheus is reachable through the ingress"
             exit 1
           fi
-
-      - name: Send Pushover notification
-        if: always()
-        env:
-          PUSHOVER_TOKEN: ${{ secrets.PUSHOVER_TOKEN }}
-          PUSHOVER_USER: ${{ secrets.PUSHOVER_USER }}
-        run: |
-          if [ -z "$PUSHOVER_TOKEN" ] || [ -z "$PUSHOVER_USER" ]; then
-            echo "Pushover secrets unset; skipping the notification."
-            exit 0
-          fi
-          if [ "${{ job.status }}" = "success" ]; then
-            PRIORITY=0
-            TITLE="✅ MetaOS deployed"
-          else
-            PRIORITY=1
-            TITLE="❌ MetaOS deploy failed"
-          fi
-          curl -s --form-string "token=$PUSHOVER_TOKEN" \
-            --form-string "user=$PUSHOVER_USER" \
-            --form-string "title=$TITLE" \
-            --form-string "message=metaos ${{ needs.build.outputs.tag }} (${GITHUB_SHA:0:7}) by ${GITHUB_ACTOR}" \
-            --form-string "priority=$PRIORITY" \
-            https://api.pushover.net/1/messages.json > /dev/null
