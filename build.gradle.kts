@@ -28,6 +28,7 @@ dependencies {
     // implementation("org.springframework.boot:spring-boot-starter-web")
     // implementation("org.springframework.boot:spring-boot-starter-webflux")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
+    runtimeOnly("io.micrometer:micrometer-registry-prometheus") // /actuator/prometheus, scraped in k8s
     implementation("org.springframework.boot:spring-boot-starter-webmvc")
 
     // MCP
@@ -37,9 +38,14 @@ dependencies {
 
     implementation("tools.jackson.module:jackson-module-kotlin")
 
+    // Security - MCP endpoint is an OAuth2 resource server, Keycloak is the authorization server
+    implementation("org.springframework.boot:spring-boot-starter-security-oauth2-resource-server")
+    implementation("org.springaicommunity:mcp-server-security:0.1.14")
+
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
+    testImplementation("org.springframework.boot:spring-boot-starter-security-test")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
     testImplementation("org.springframework.boot:spring-boot-testcontainers")
     testImplementation("org.testcontainers:testcontainers-postgresql")
@@ -83,6 +89,11 @@ tasks.withType<Test> {
         showStandardStreams = true
         events("passed", "skipped", "failed")
     }
+}
+
+// Fixed name, so docker/Dockerfile doesn't depend on the version
+tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {
+    archiveFileName = "metaos.jar"
 }
 
 tasks.named<org.springframework.boot.gradle.tasks.run.BootRun>("bootRun") {

@@ -12,6 +12,54 @@ services:
     labels:
       org.springframework.boot.jdbc.parameters: '' # ssl=true&sslmode=require'
 
+  # One-shot: creates the "keycloak" database in the postgres service if missing
+  # (initdb scripts would only run on an empty data directory).
+  keycloak-db-init:
+    image: 'postgres:18-alpine'
+    depends_on:
+      - postgres
+    environment:
+      - PGHOST=postgres
+      - PGUSER=${POSTGRES_USER}
+      - PGPASSWORD=${POSTGRES_PASSWORD}
+      - PGDATABASE=${POSTGRES_DB}
+    entrypoint: ['sh', '-c']
+    command:
+      - |
+        until pg_isready -q; do sleep 1; done
+        psql -tAc "SELECT 1 FROM pg_database WHERE datname = 'keycloak'" | grep -q 1 || createdb keycloak
+
+  # Identity provider / OAuth2 authorization server for the MCP endpoint, persisted in the "keycloak" database.
+  # Realm "metaos" is imported from ./keycloak on first start only (existing realms are left untouched).
+  keycloak:
+    image: 'quay.io/keycloak/keycloak:26.8.1'
+    command: ['start-dev', '--import-realm']
+    depends_on:
+      keycloak-db-init:
+        condition: service_completed_successfully
+    environment:
+      - KC_DB=postgres
+      - KC_DB_URL=jdbc:postgresql://postgres:5432/keycloak
+      - KC_DB_USERNAME=${POSTGRES_USER}
+      - KC_DB_PASSWORD=${POSTGRES_PASSWORD}
+      - KC_BOOTSTRAP_ADMIN_USERNAME=${KEYCLOAK_ADMIN_USERNAME:-admin}
+      - KC_BOOTSTRAP_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      # Pin the public URL so the token issuer is stable no matter how Keycloak is reached
+      - KC_HOSTNAME=http://localhost:8180
+      - KC_HEALTH_ENABLED=true
+      # Substituted into metaos-realm.json at import time
+      - METAOS_MCP_URL=${METAOS_MCP_URL:-http://localhost:8080/mcp}
+      - KEYCLOAK_DEV_PASSWORD=${KEYCLOAK_DEV_PASSWORD:-dev}
+    ports:
+      - '127.0.0.1:8180:8080'
+    volumes:
+      - ./keycloak:/opt/keycloak/data/import:ro
+    healthcheck:
+      test: ['CMD-SHELL', "exec 3<>/dev/tcp/localhost/9000 && printf 'GET /health/ready HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q UP <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
 volumes:
   pg-data:
     driver: "local"

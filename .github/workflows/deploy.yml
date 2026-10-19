@@ -1,0 +1,177 @@
+name: Build and Deploy
+
+# Tests, builds both images and rolls them out to metaos-prod. Same shape as boo-run's deploy-master.yml and
+# bongbong's deploy-rooms.yml: the private registry and the API server are reached over Tailscale as tag:ci.
+#
+# Repo secrets - the names boo-run and bongbong use, so one set covers all three:
+#   TS_OAUTH_CLIENT_ID / TS_OAUTH_SECRET                Tailscale OAuth client for tag:ci
+#   DOCKER_REGISTRY_USERNAME / DOCKER_REGISTRY_PASSWORD  the registry
+#   KUBECONFIG                                           base64 of the Tailscale operator kubeconfig (k8s/README.md)
+#   PUSHOVER_TOKEN / PUSHOVER_USER                       optional; the notification is skipped without them
+
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch:
+
+env:
+  REGISTRY: registry.folk-decibel.ts.net
+  APP_IMAGE: registry.folk-decibel.ts.net/metaos/metaos
+  KEYCLOAK_IMAGE: registry.folk-decibel.ts.net/metaos/keycloak
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.get-tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # `git describe` needs the tags, which a shallow clone omits
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: 'zulu'
+          java-version: '25'
+
+      - uses: gradle/actions/setup-gradle@v5
+
+      # Testcontainers runs its Postgres on the runner's Docker
+      - name: Test and build the boot jar
+        run: ./gradlew test bootJar
+
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v4
+        with:
+          ping: registry.folk-decibel.ts.net
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - name: Login to Docker Registry
+        run: |
+          echo "${{ secrets.DOCKER_REGISTRY_PASSWORD }}" \
+            | docker login "$REGISTRY" -u "${{ secrets.DOCKER_REGISTRY_USERNAME }}" --password-stdin
+
+      - name: Get version tag
+        id: get-tag
+        run: |
+          TAG=$(git describe --tags --always)
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Building images with tag: $TAG"
+
+      # Host networking puts buildkit on the tailnet, so it can push to the registry
+      - uses: docker/setup-buildx-action@v4
+        with:
+          driver-opts: network=host
+
+      - name: Build and push images
+        run: |
+          TAG=${{ steps.get-tag.outputs.tag }}
+          docker buildx build --platform linux/amd64 -f docker/Dockerfile \
+            -t "$APP_IMAGE:latest" -t "$APP_IMAGE:$TAG" --push .
+          docker buildx build --platform linux/amd64 -f docker/keycloak.Dockerfile \
+            -t "$KEYCLOAK_IMAGE:latest" -t "$KEYCLOAK_IMAGE:$TAG" --push .
+
+  deploy:
+    needs: [ build ]
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://metaos.ogrodje.si
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v4
+        with:
+          ping: tailscale-operator.folk-decibel.ts.net
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - uses: azure/setup-kubectl@v5
+
+      - name: Setup kustomize
+        run: |
+          # Pinned release binary, as in boo-run and bongbong
+          KVER=5.4.3
+          curl -sSL -o /tmp/kustomize.tar.gz \
+            "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv${KVER}/kustomize_v${KVER}_linux_amd64.tar.gz"
+          tar -xzf /tmp/kustomize.tar.gz -C /tmp
+          sudo mv /tmp/kustomize /usr/local/bin/
+          kustomize version
+
+      - name: Configure kubectl
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Update kustomization with the new tag
+        run: |
+          cd k8s/base
+          kustomize edit set image \
+            "$APP_IMAGE:${{ needs.build.outputs.tag }}" \
+            "$KEYCLOAK_IMAGE:${{ needs.build.outputs.tag }}"
+
+      - name: Deploy
+        run: |
+          kubectl apply -k k8s/base/
+
+          # Own keys: deployment.kubernetes.io/revision belongs to the Deployment controller
+          kubectl annotate deployment metaos -n metaos-prod \
+            ogrodje.si/git-sha="${GITHUB_SHA}" \
+            ogrodje.si/deployed-by="${GITHUB_ACTOR}" \
+            ogrodje.si/deployed-at="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --overwrite
+
+          kubectl rollout status deployment/keycloak -n metaos-prod --timeout=5m
+          kubectl rollout status deployment/metaos -n metaos-prod --timeout=5m
+
+      - name: Smoke the deployed app
+        run: |
+          # Public discovery documents: prove Cloudflare, nginx, the app and Keycloak, and that the URLs line up
+          meta=$(curl -sf --retry 6 --retry-delay 5 --retry-all-errors \
+            https://metaos.ogrodje.si/.well-known/oauth-protected-resource/mcp)
+          if ! echo "$meta" | grep -q '"resource":"https://metaos.ogrodje.si/mcp"'; then
+            echo "::error::unexpected protected resource metadata: $meta"
+            exit 1
+          fi
+          oidc=$(curl -sf --retry 6 --retry-delay 5 --retry-all-errors \
+            https://metaos-auth.ogrodje.si/realms/metaos/.well-known/openid-configuration)
+          if ! echo "$oidc" | grep -q '"issuer":"https://metaos-auth.ogrodje.si/realms/metaos"'; then
+            echo "::error::unexpected Keycloak issuer"
+            exit 1
+          fi
+          # Actuator is on the management port, which no Ingress routes
+          code=$(curl -s -o /dev/null -w '%{http_code}' https://metaos.ogrodje.si/actuator/prometheus)
+          if [ "$code" = 200 ]; then
+            echo "::error::/actuator/prometheus is reachable through the ingress"
+            exit 1
+          fi
+
+      - name: Send Pushover notification
+        if: always()
+        env:
+          PUSHOVER_TOKEN: ${{ secrets.PUSHOVER_TOKEN }}
+          PUSHOVER_USER: ${{ secrets.PUSHOVER_USER }}
+        run: |
+          if [ -z "$PUSHOVER_TOKEN" ] || [ -z "$PUSHOVER_USER" ]; then
+            echo "Pushover secrets unset; skipping the notification."
+            exit 0
+          fi
+          if [ "${{ job.status }}" = "success" ]; then
+            PRIORITY=0
+            TITLE="✅ MetaOS deployed"
+          else
+            PRIORITY=1
+            TITLE="❌ MetaOS deploy failed"
+          fi
+          curl -s --form-string "token=$PUSHOVER_TOKEN" \
+            --form-string "user=$PUSHOVER_USER" \
+            --form-string "title=$TITLE" \
+            --form-string "message=metaos ${{ needs.build.outputs.tag }} (${GITHUB_SHA:0:7}) by ${GITHUB_ACTOR}" \
+            --form-string "priority=$PRIORITY" \
+            https://api.pushover.net/1/messages.json > /dev/null

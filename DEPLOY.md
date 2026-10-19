@@ -1,0 +1,142 @@
+# Deployment
+
+MetaOS runs on the ogrodje-one Kubernetes cluster in namespace `metaos-prod`. It follows the same pattern as goo,
+boo-run and bongbong: images in the Tailscale registry, `kustomize` picks the tags, Postgres is the shared CNPG
+cluster, ingress-nginx routes and Cloudflare terminates TLS.
+
+[`k8s/README.md`](k8s/README.md) is the operational reference (commands, checks). This document covers the setup as a
+whole, the decisions behind it and what is still left to do.
+
+Status (2026-10-19): everything is written and verified locally. Nothing is deployed or committed yet.
+
+## What it sets up
+
+| Piece                       | Where                                         | Notes                                                                                   |
+|-----------------------------|-----------------------------------------------|-----------------------------------------------------------------------------------------|
+| App                         | `https://metaos.ogrodje.si`                   | `/mcp` is the MCP endpoint                                                              |
+| Keycloak                    | `https://metaos-auth.ogrodje.si`              | Own instance, realm `metaos` baked into the image and imported on first start           |
+| Postgres                    | `main-cluster` in namespace `pg`              | Databases `metaos` and `metaos_keycloak`, each owned by a role of the same name         |
+| Images                      | `registry.folk-decibel.ts.net/metaos/...`     | `metaos` and `keycloak`, tagged with `git describe`                                     |
+| Health checks and metrics   | Port 9090                                     | Never routed by the Ingress; Prometheus scrapes it through a ServiceMonitor             |
+
+### Files
+
+```
+docker/Dockerfile            the app: boot jar on distroless Java 25, Spring Boot layers, runs as non-root
+docker/keycloak.Dockerfile   Keycloak 26.8.1, optimized build, keycloak/metaos-realm.json baked in
+.dockerignore                allowlist: only the boot jar and the realm JSON enter the build context
+k8s/base/
+  namespace.yaml             metaos-prod
+  deployment-metaos.yaml     ConfigMap, Deployment, Service, Ingress, ServiceMonitor
+  deployment-keycloak.yaml   Deployment, Service, Ingress
+  kustomization.yaml         the resources, the public URLs and the image tags
+k8s/set_secrets.sh           database roles and databases, secrets, registry pull secret
+k8s/ci/deployer.yaml         CI's permissions, scoped to metaos-prod
+k8s/README.md                operational reference
+.github/workflows/deploy.yml test, build, push, deploy and smoke-test on push to master
+justfile                     the same steps by hand: just push, just deploy, just logs, just manifests
+```
+
+### Details
+
+- **Public URLs in one place.** `kustomization.yaml` generates a `public-urls` ConfigMap (Keycloak hostname, issuer,
+  MCP URL) that both Deployments read. Its name carries a content hash, so changing a URL rolls both.
+- **Proxy headers.** The app trusts ingress-nginx's `X-Forwarded-*` headers, so its OAuth metadata advertises
+  `https://metaos.ogrodje.si/mcp` rather than the pod's own address.
+- **Streaming.** The app's Ingress turns off nginx buffering and raises the timeouts to an hour, because Streamable
+  HTTP responses can be long-lived SSE streams.
+- **Probes.** Both Deployments have a startup probe, so Flyway migrations and Keycloak's first-start bootstrap don't
+  get the pod killed. Keycloak 26.8 answers `started` and `live` while still bootstrapping and only `ready` once
+  it's done; readiness keeps traffic away until then.
+- **Graceful shutdown.** The app has a 10 s `preStop` sleep (distroless has no `sleep` binary, so this uses the
+  Kubernetes sleep action) to let ingress-nginx drop it before Spring shuts down.
+- **Resources.** Memory requests and limits, no CPU limit, as in bongbong: a CPU quota would only throttle JVM
+  startup on a shared node.
+- **`set_secrets.sh` is idempotent.** It finds the CNPG primary by label, creates roles and databases only if
+  missing, and always resets the passwords, so re-running it with new values rotates them. Secrets are applied
+  rather than deleted and recreated, so there is no window without them.
+- **The `dev` user.** The realm JSON has a `dev` user whose password comes from `KEYCLOAK_DEV_PASSWORD`. In production
+  that is a random secret, so the account is unusable until someone deliberately uses or deletes it.
+
+## Changes to the app
+
+- `build.gradle.kts`: added `micrometer-registry-prometheus`. The boot jar is now always `metaos.jar`, so the
+  Dockerfile doesn't depend on the version.
+- `Security.kt`: `/actuator/prometheus` is allowed without a token, next to `/actuator/health/**`. In Kubernetes
+  actuator is on port 9090 only, so this doesn't expose anything publicly.
+- `application.properties` (main and test, because the test copy replaces the main one): health probe groups on, and
+  `health,prometheus` exposed.
+- `SecurityTest.kt`: a test that `/actuator/prometheus` is public and serves metrics.
+- `devenv.nix`: added `just`.
+
+## How it was verified
+
+- The full test suite passes, including the new Prometheus test.
+- `kustomize build k8s/base` renders; `k8s/ci/deployer.yaml` passes a client dry-run; the workflow YAML parses; the
+  justfile lists its recipes; `set_secrets.sh` passes `bash -n`.
+- Both images build for `linux/amd64` and natively.
+- **App image**, run against the local compose Postgres with the production settings:
+  - liveness, readiness and `/actuator/prometheus` answer on 9090;
+  - actuator returns 401 on the public port 8080;
+  - with proxy headers, the protected resource metadata is `https://metaos.ogrodje.si/mcp` with authorization server
+    `https://metaos-auth.ogrodje.si/realms/metaos`, and anonymous `/mcp` gets a 401 pointing at it.
+- **Keycloak image**, run against a throwaway Postgres:
+  - realm `metaos` is imported;
+  - the issuer comes from `KC_HOSTNAME`;
+  - the `mcp:tools` audience is the production MCP URL;
+  - the `dev` user accepts the secret password and rejects `dev`.
+- **The SQL from `set_secrets.sh`** ran twice cleanly against the throwaway Postgres. Both roles can log in, and the
+  `metaos` role can create the `citext` extension that `V1__init.sql` needs.
+
+### Not yet verified
+
+- Nothing has been applied to the cluster. One read-only look showed `metaos-prod` exists but is empty (no `regcred`
+  yet) and that `main-cluster-1` is the CNPG primary. The ingress controller's configuration wasn't checked.
+- The workflow hasn't run: there is no git remote yet.
+
+## Decisions to confirm
+
+- **Hostnames.** `metaos.ogrodje.si` and `metaos-auth.ogrodje.si` are placeholders. They're set in
+  `k8s/base/kustomization.yaml`, the two Ingresses and the smoke test in `.github/workflows/deploy.yml`.
+- **Own Keycloak.** MetaOS gets its own Keycloak, as in `compose.yml`. The alternative is a `metaos` realm on goo's
+  existing Keycloak at `keycloak.ogrodje.si`.
+- **Login from claude.ai.** The realm only lets clients register themselves with `localhost` redirect URIs. Claude
+  Code and MCP Inspector work; claude.ai would need its host added to the realm's Trusted Hosts policy.
+
+## Differences from the older projects
+
+- **No registry cleanup job.** Tags are commit hashes, which don't sort by age, so boo-run's keep-the-newest-three
+  job could delete the image that's currently deployed.
+- **Deploy annotations use own keys** (`ogrodje.si/git-sha`, `ogrodje.si/deployed-by`, `ogrodje.si/deployed-at`).
+  boo-run overwrites `deployment.kubernetes.io/revision`, which belongs to the Deployment controller.
+- **CI permissions are namespaced.** bongbong's deployer role is cluster-wide; this one is a Role in `metaos-prod`
+  plus get/patch on that one Namespace object. CI has no access to secrets: `set_secrets.sh` is run by hand.
+
+## Known trade-offs
+
+- **The realm is imported once.** Later edits to `keycloak/metaos-realm.json` don't reach production; make them in the
+  admin console too. The same goes for `METAOS_MCP_URL`: changing it rolls the app, but Keycloak's `mcp:tools`
+  audience mapper keeps the old value until it's edited there.
+- **Every deploy rolls Keycloak**, since both images get the same tag. It's a rolling update, so the old pod serves
+  until the new one is ready.
+
+## Next steps
+
+1. [ ] **DNS.** Add `metaos.ogrodje.si` and `metaos-auth.ogrodje.si` as proxied Cloudflare CNAMEs to
+   `ogrodje-one.boo.run`, like `goo.ogrodje.si`.
+2. [ ] **Secrets.** Add `PROD_METAOS_DB_PASSWORD`, `PROD_KEYCLOAK_DB_PASSWORD`, `PROD_KEYCLOAK_ADMIN_PASSWORD`,
+   `PROD_KEYCLOAK_DEV_PASSWORD` (`openssl rand -hex 24` each), `DOCKER_REGISTRY_USERNAME` and
+   `DOCKER_REGISTRY_PASSWORD` to `.envrc`, then run `./k8s/set_secrets.sh`.
+3. [ ] **First deploy.** `just push deploy`.
+4. [ ] **Keycloak.** At `https://metaos-auth.ogrodje.si/admin`, sign in as `admin`, create a permanent admin in the
+   master realm, then delete the temporary bootstrap admin and the `dev` user. Add real users with verified emails;
+   that's how a login is linked to a person.
+5. [ ] **CI**, once the repo is on GitHub:
+    - add the repo secrets `TS_OAUTH_CLIENT_ID`, `TS_OAUTH_SECRET`, `DOCKER_REGISTRY_USERNAME`,
+      `DOCKER_REGISTRY_PASSWORD` and `KUBECONFIG` (base64 of the credential-less Tailscale operator kubeconfig, not
+      `ogrodje-one-config`);
+    - run `kubectl apply -f k8s/ci/deployer.yaml`;
+    - in the Tailscale access policy, add `metaos-deployers` to the groups `tag:ci` impersonates on
+      `tag:k8s-operator`, next to `bongbong-deployers`.
+6. [ ] **Check it.** Run the commands in [`k8s/README.md`](k8s/README.md#checking-it), then
+   `claude mcp add --transport http metaos https://metaos.ogrodje.si/mcp`.

@@ -6,13 +6,70 @@ import org.springframework.ai.mcp.annotation.McpToolParam
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
+import java.time.LocalDate
 import java.util.UUID
 
-data class EpisodeDto(val id: UUID?, val code: String, val title: String)
-data class EpisodePersonDto(val personId: UUID?, val name: String, val email: String?, val role: Role)
+data class EpisodeDto(
+    val id: UUID?,
+    val code: String?,
+    val title: String,
+    val status: EpisodeStatus,
+    val sessionId: UUID?,
+    val show: String?,
+    val recordingDate: LocalDate?,
+    val airedDate: LocalDate?,
+    val addedDate: LocalDate,
+    val youtubeUrl: String?,
+    val spotifyUrl: String?,
+    val applePodcastsUrl: String?,
+    val patreonUrl: String?,
+)
 
-private fun Episode.toDto() = EpisodeDto(id, code, title)
-private fun EpisodePerson.toDto() = EpisodePersonDto(person.id, person.name, person.email, role)
+// What get_episode returns; summaries are long, so lists of episodes leave them out
+data class EpisodeDetailsDto(
+    val id: UUID?,
+    val code: String?,
+    val title: String,
+    val status: EpisodeStatus,
+    val sessionId: UUID?,
+    val show: String?,
+    val recordingDate: LocalDate?,
+    val airedDate: LocalDate?,
+    val addedDate: LocalDate,
+    val youtubeUrl: String?,
+    val spotifyUrl: String?,
+    val applePodcastsUrl: String?,
+    val patreonUrl: String?,
+    val summary: String?,
+    val machineSummary: String?,
+)
+data class EpisodePersonDto(val personId: UUID?, val name: String, val email: String?, val roles: List<Role>)
+
+fun Episode.toDto() = EpisodeDto(
+    id = id, code = code, title = title, status = status, sessionId = session?.id, show = show?.name,
+    recordingDate = recordingDate, airedDate = airedDate, addedDate = addedDate,
+    youtubeUrl = youtubeUrl, spotifyUrl = spotifyUrl, applePodcastsUrl = applePodcastsUrl, patreonUrl = patreonUrl,
+)
+
+private fun Episode.toDetailsDto() = EpisodeDetailsDto(
+    id = id, code = code, title = title, status = status, sessionId = session?.id, show = show?.name,
+    recordingDate = recordingDate, airedDate = airedDate, addedDate = addedDate,
+    youtubeUrl = youtubeUrl, spotifyUrl = spotifyUrl, applePodcastsUrl = applePodcastsUrl, patreonUrl = patreonUrl,
+    summary = summary, machineSummary = machineSummary,
+)
+
+// For messages: ideas may not have a code yet
+private val Episode.label get() = code ?: "\"$title\""
+
+private fun Person.onEpisode(assignments: List<EpisodePerson>) =
+    EpisodePersonDto(id, name, email, assignments.map { it.role }.sorted())
+
+// One entry per person, with all of their roles on the episode; hosts first
+private fun List<EpisodePerson>.toEpisodePersonDtos(): List<EpisodePersonDto> =
+    groupBy { it.person.id }.values.map { it.first().person.onEpisode(it) }
+        .sortedWith(compareBy({ it.roles.first() }, { it.name }))
+
+private fun List<String>.joinedWithAnd() = if (size < 2) joinToString() else dropLast(1).joinToString() + " and " + last()
 
 @Component
 class EpisodesMCP(
@@ -21,50 +78,199 @@ class EpisodesMCP(
     private val episodePeople: EpisodePeopleRepository,
 ) {
 
-    @McpTool(name = "list_episodes", description = "List all episodes")
-    fun list(): List<EpisodeDto> = episodes.findAll().map { it.toDto() }
+    private fun findEpisode(ref: String) = requireNotNull(episodes.findByRef(ref)) { "Episode $ref not found" }
 
-    @McpTool(name = "get_episode", description = "Find an episode by its code (case-insensitive)")
-    fun get(@McpToolParam(description = "Episode code, e.g. S01E03") code: String): EpisodeDto? =
-        episodes.findByCode(code)?.toDto()
+    @McpTool(
+        name = "list_episodes",
+        description = "List episodes, latest season and episode first and ideas without a code last, optionally only " +
+            "those with a given status. Summaries are left out; get_episode has them"
+    )
+    fun list(
+        @McpToolParam(description = "Only list episodes with this status", required = false) status: EpisodeStatus? = null,
+    ): List<EpisodeDto> =
+        (if (status == null) episodes.findLatestFirst() else episodes.findLatestFirstByStatus(status)).map { it.toDto() }
+
+    @McpTool(name = "get_episode", description = "Find an episode by its code (case-insensitive) or ID, with its summaries")
+    fun get(@McpToolParam(description = EPISODE_REF) code: String): EpisodeDetailsDto? =
+        episodes.findByRef(code)?.toDetailsDto()
 
     @Transactional
-    @McpTool(name = "create_episode", description = "Create a new episode")
+    @McpTool(
+        name = "create_episode",
+        description = "Create a new episode. It starts as an IDEA, which can do without a code until it is planned"
+    )
     fun create(
-        @McpToolParam(description = "Unique episode code") code: String,
+        @McpToolParam(description = "Unique episode code, e.g. S05E08", required = false) code: String?,
         @McpToolParam(description = "Episode title") title: String,
-    ): EpisodeDto = episodes.save(Episode(title = title, code = code)).toDto()
+    ): EpisodeDto = episodes.save(Episode(title = title, code = code?.trim()?.ifEmpty { null })).toDto()
 
     @Transactional
-    @McpTool(name = "delete_episode", description = "Soft-delete an episode by its code (case-insensitive)")
-    fun delete(@McpToolParam(description = "Episode code, e.g. S01E03") code: String): EpisodeDto? =
-        episodes.findByCode(code)?.also { episodes.delete(it) }?.toDto()
-
-    @Transactional(readOnly = true)
-    @McpTool(name = "list_episode_people", description = "List the people on an episode and their roles")
-    fun listPeople(@McpToolParam(description = "Episode code, e.g. S01E03") code: String): List<EpisodePersonDto> {
-        val episode = requireNotNull(episodes.findByCode(code)) { "Episode $code not found" }
-        return episodePeople.findByEpisodeWithPerson(episode).map { it.toDto() }
+    @McpTool(
+        name = "update_episode",
+        description = "Change an episode's code, title, summaries or dates. Omitted fields are left as they are"
+    )
+    fun update(
+        @McpToolParam(description = EPISODE_REF) code: String,
+        @McpToolParam(description = "New unique episode code", required = false) newCode: String?,
+        @McpToolParam(description = "New title", required = false) title: String?,
+        @McpToolParam(description = "Description of the episode, in Markdown; empty to clear", required = false)
+        summary: String? = null,
+        @McpToolParam(description = "AI-generated summary of the episode, in Markdown; empty to clear", required = false)
+        machineSummary: String? = null,
+        @McpToolParam(description = "When the episode is or was recorded, e.g. 2026-10-19", required = false)
+        recordingDate: LocalDate? = null,
+        @McpToolParam(description = "When the episode was released, e.g. 2026-10-19", required = false)
+        airedDate: LocalDate? = null,
+        @McpToolParam(description = "When the episode was added, e.g. 2026-10-19", required = false)
+        addedDate: LocalDate? = null,
+    ): EpisodeDetailsDto {
+        val episode = findEpisode(code)
+        newCode?.trim()?.let { new ->
+            require(new.isNotEmpty()) { "Code must not be blank" }
+            require(episodes.findByCode(new).let { it == null || it == episode }) { "Episode $new already exists" }
+            episode.code = new
+        }
+        title?.let {
+            require(it.isNotBlank()) { "Title must not be blank" }
+            episode.title = it.trim()
+        }
+        summary?.let { episode.summary = it.trim().ifEmpty { null } }
+        machineSummary?.let { episode.machineSummary = it.trim().ifEmpty { null } }
+        recordingDate?.let { episode.recordingDate = it }
+        airedDate?.let { episode.airedDate = it }
+        addedDate?.let { episode.addedDate = it }
+        return episode.toDetailsDto()
     }
 
     @Transactional
     @McpTool(
+        name = "set_episode_status",
+        description = "Move an episode through its lifecycle: IDEA → PLANNED → SCHEDULED → RECORDED → IN_PRODUCTION → " +
+            "READY → EARLY_ACCESS (optional) → PUBLISHED, one step forward or back to any earlier step; ON_HOLD or " +
+            "CANCELLED any time before it is published. Each step needs what the ones before it did, plus: PLANNED a " +
+            "code and a host, SCHEDULED a recording date, RECORDED one that is not in the future, IN_PRODUCTION a " +
+            "producer, READY a summary, EARLY_ACCESS a Patreon link, PUBLISHED a YouTube, Spotify or Apple Podcasts " +
+            "link. Publishing sets the aired date to today if there is none"
+    )
+    fun setStatus(
+        @McpToolParam(description = EPISODE_REF) code: String,
+        @McpToolParam(description = "Status to move the episode to") status: EpisodeStatus,
+    ): EpisodeDto {
+        val episode = findEpisode(code)
+        require(episode.status.canMoveTo(status)) { "Episode ${episode.label} can't go from ${episode.status} to $status" }
+        val missing = missingFor(episode, status)
+        require(missing.isEmpty()) { "Episode ${episode.label} needs ${missing.joinedWithAnd()} before it can be $status" }
+        episode.status = status
+        if (status == EpisodeStatus.PUBLISHED && episode.airedDate == null) episode.airedDate = LocalDate.now()
+        return episode.toDto()
+    }
+
+    // What an episode needs before it can enter a status. Needs build up along the main path, so resuming from
+    // ON_HOLD can't skip any; the Patreon link is only needed for EARLY_ACCESS itself, as that step is optional.
+    private fun missingFor(episode: Episode, target: EpisodeStatus): List<String> {
+        if (target.codeOptional) return emptyList()
+        val roles by lazy { episodePeople.findByEpisodeWithPerson(episode).map { it.role }.toSet() }
+        fun from(step: EpisodeStatus) = target.ordinal >= step.ordinal
+        val publicLinks = listOf(episode.youtubeUrl, episode.spotifyUrl, episode.applePodcastsUrl)
+        return buildList {
+            if (episode.code == null) add("a code")
+            if (Role.HOST !in roles) add("a host")
+            if (from(EpisodeStatus.SCHEDULED) && episode.recordingDate == null) add("a recording date")
+            if (from(EpisodeStatus.RECORDED) && episode.recordingDate?.isAfter(LocalDate.now()) == true) {
+                add("a recording date that is not in the future")
+            }
+            if (from(EpisodeStatus.IN_PRODUCTION) && Role.PRODUCER !in roles) add("a producer")
+            if (from(EpisodeStatus.READY) && episode.summary == null) add("a summary")
+            if (target == EpisodeStatus.EARLY_ACCESS && episode.patreonUrl == null) add("a Patreon link")
+            if (target == EpisodeStatus.PUBLISHED && publicLinks.all { it == null }) {
+                add("a YouTube, Spotify or Apple Podcasts link")
+            }
+        }
+    }
+
+    @Transactional
+    @McpTool(
+        name = "set_episode_link",
+        description = "Set or clear where an episode can be watched or listened to: YouTube, Spotify, Apple Podcasts or Patreon"
+    )
+    fun setLink(
+        @McpToolParam(description = EPISODE_REF) code: String,
+        @McpToolParam(description = "Platform the link points to") platform: Platform,
+        @McpToolParam(description = "https URL of the episode on that platform; omit to clear", required = false) url: String?,
+    ): EpisodeDto {
+        val episode = findEpisode(code)
+        episode.setLink(platform, url)
+        return episode.toDto()
+    }
+
+    @Transactional
+    @McpTool(name = "delete_episode", description = "Soft-delete an episode by its code (case-insensitive) or ID")
+    fun delete(@McpToolParam(description = EPISODE_REF) code: String): EpisodeDto? =
+        episodes.findByRef(code)?.also { episodes.delete(it) }?.toDto()
+
+    @Transactional
+    @McpTool(
+        name = "restore_episode",
+        description = "Bring back a soft-deleted episode by its code (case-insensitive) or ID, " +
+            "with its people, links, session and show"
+    )
+    fun restore(@McpToolParam(description = EPISODE_REF) code: String): EpisodeDto {
+        val id = requireNotNull(code.toUuidOrNull()?.takeIf { episodes.isDeleted(it) } ?: episodes.findDeletedIdByCode(code)) {
+            "There is no deleted episode $code"
+        }
+        episodes.findDeletedCode(id)?.let { require(episodes.findByCode(it) == null) { "Episode $it already exists" } }
+        episodes.restore(id)
+        return requireNotNull(episodes.findByIdOrNull(id)).toDto()
+    }
+
+    @Transactional(readOnly = true)
+    @McpTool(name = "list_episode_people", description = "List the people on an episode and their roles")
+    fun listPeople(@McpToolParam(description = EPISODE_REF) code: String): List<EpisodePersonDto> =
+        episodePeople.findByEpisodeWithPerson(findEpisode(code)).toEpisodePersonDtos()
+
+    @Transactional
+    @McpTool(
         name = "assign_person_to_episode",
-        description = "Give a person a role on an episode, replacing the role they already have on it"
+        description = "Give a person a role on an episode and return all of their roles on it. A person can have " +
+            "several roles on one episode; assigning a role they already have changes nothing"
     )
     fun assignPerson(
-        @McpToolParam(description = "Episode code, e.g. S01E03") code: String,
+        @McpToolParam(description = EPISODE_REF) code: String,
         @McpToolParam(description = "Person ID") personId: UUID,
         @McpToolParam(description = "Role on the episode") role: Role,
     ): EpisodePersonDto {
-        val episode = requireNotNull(episodes.findByCode(code)) { "Episode $code not found" }
+        val episode = findEpisode(code)
         val person = requireNotNull(people.findByIdOrNull(personId)) { "Person $personId not found" }
-        val assignment = episodePeople.findByEpisodeAndPerson(episode, person)?.apply { this.role = role }
-            ?: episodePeople.save(EpisodePerson(episode = episode, person = person, role = role))
-        return assignment.toDto()
+        if (episodePeople.findByEpisodeAndPersonAndRole(episode, person, role) == null) {
+            episodePeople.save(EpisodePerson(episode = episode, person = person, role = role))
+        }
+        return person.onEpisode(episodePeople.findByEpisodeAndPerson(episode, person))
     }
 
-    @McpResource(uri = "episode://{code}", name = "Episode", description = "Episode by code")
+    @Transactional
+    @McpTool(
+        name = "remove_person_from_episode",
+        description = "Take a person off an episode: one of their roles on it, or all of them when no role is given. " +
+            "Returns the roles they still have on it"
+    )
+    fun removePerson(
+        @McpToolParam(description = EPISODE_REF) code: String,
+        @McpToolParam(description = "Person ID") personId: UUID,
+        @McpToolParam(description = "Role to remove; omit to remove all of the person's roles", required = false) role: Role?,
+    ): EpisodePersonDto {
+        val episode = findEpisode(code)
+        val person = requireNotNull(people.findByIdOrNull(personId)) { "Person $personId not found" }
+        val (removed, remaining) = episodePeople.findByEpisodeAndPerson(episode, person)
+            .partition { role == null || it.role == role }
+        require(removed.isNotEmpty()) {
+            if (role == null) "${person.name} is not on episode ${episode.label}"
+            else "${person.name} is not $role on episode ${episode.label}"
+        }
+        episodePeople.deleteAll(removed)
+        return person.onEpisode(remaining)
+    }
+
+    @McpResource(uri = "episode://{code}", name = "Episode", description = "Episode by code or ID")
     fun resource(code: String): String =
-        episodes.findByCode(code)?.let { "${it.code}: ${it.title}" } ?: "Episode $code not found"
+        episodes.findByRef(code)?.let { "${it.label}: ${it.title}" } ?: "Episode $code not found"
 }

@@ -1,0 +1,24 @@
+resources:
+- namespace.yaml
+- deployment-keycloak.yaml
+- deployment-metaos.yaml
+
+# Public URLs, read by both Deployments: Keycloak stamps them into tokens and the app checks tokens against them, so
+# they have to agree. The name gets a content hash, so changing one rolls both Deployments.
+# METAOS_MCP_URL only reaches Keycloak at realm import (first start) - later it has to be changed in the admin console
+# too (Client scopes -> mcp:tools -> Mappers -> metaos-mcp-audience).
+configMapGenerator:
+- name: public-urls
+  namespace: metaos-prod
+  literals:
+  - KC_HOSTNAME=https://metaos-auth.ogrodje.si
+  - KEYCLOAK_ISSUER_URI=https://metaos-auth.ogrodje.si/realms/metaos
+  - METAOS_MCP_URL=https://metaos.ogrodje.si/mcp
+
+images:
+- name: registry.folk-decibel.ts.net/metaos/metaos
+  newTag: latest
+- name: registry.folk-decibel.ts.net/metaos/keycloak
+  newTag: latest
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization

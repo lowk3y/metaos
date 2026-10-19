@@ -26,6 +26,7 @@ in {
     pkgs.kubectx
     pkgs.kubernetes-helm
     pkgs.kustomize
+    pkgs.just
   ];
 
   env = {

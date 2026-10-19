@@ -1,0 +1,5 @@
+# An allowlist: both images (docker/) build from the repo root, which also holds .devenv, Gradle caches and the
+# cluster's kubeconfig (ogrodje-*) - none of which belongs in a build context.
+*
+!build/libs/metaos.jar
+!keycloak/metaos-realm.json

@@ -1,0 +1,68 @@
+# What CI may do in the cluster (k8s/README.md, "CI"). Same scheme as bongbong's k8s/ci/deployer.yaml: the runner
+# joins the tailnet as tag:ci, the Tailscale operator's API proxy authenticates it by that identity, and the tailnet
+# policy impersonates the group below - so there is no cluster credential anywhere. Unlike bongbong this is scoped to
+# metaos-prod: a Role for what the manifests hold, plus get/patch on that one Namespace object.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: metaos-deployer
+  namespace: metaos-prod
+rules:
+  - apiGroups: [""]
+    resources: [configmaps, services]
+    verbs: [create, get, list, watch, update, patch, delete]
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [create, get, list, watch, update, patch, delete]
+  - apiGroups: [networking.k8s.io]
+    resources: [ingresses]
+    verbs: [create, get, list, watch, update, patch, delete]
+  - apiGroups: [monitoring.coreos.com]
+    resources: [servicemonitors]
+    verbs: [create, get, list, watch, update, patch, delete]
+  # `kubectl rollout status`, and reading what went wrong
+  - apiGroups: [apps]
+    resources: [replicasets]
+    verbs: [get, list, watch]
+  - apiGroups: [""]
+    resources: [pods, pods/log, events]
+    verbs: [get, list, watch]
+  # Deliberately absent: secrets (k8s/set_secrets.sh is run by hand), RBAC, pods/exec
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: metaos-deployer
+  namespace: metaos-prod
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: metaos-deployer
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: metaos-deployers
+---
+# k8s/base/namespace.yaml is applied with the rest; resourceNames pins this to metaos-prod
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: metaos-deployer-namespace
+rules:
+  - apiGroups: [""]
+    resources: [namespaces]
+    resourceNames: [metaos-prod]
+    verbs: [get, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: metaos-deployer-namespace
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: metaos-deployer-namespace
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: metaos-deployers

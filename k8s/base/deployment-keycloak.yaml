@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  namespace: metaos-prod
+  labels: { app: keycloak }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: keycloak } }
+  template:
+    metadata: { labels: { app: keycloak } }
+    spec:
+      containers:
+        - name: keycloak
+          # Runs `start --optimized --import-realm` (docker/keycloak.Dockerfile)
+          image: registry.folk-decibel.ts.net/metaos/keycloak
+          ports:
+            - { containerPort: 8080, name: http }
+            - { containerPort: 9000, name: management }
+
+          envFrom:
+            # KC_HOSTNAME pins the public URL, so the token issuer is the same however Keycloak is reached;
+            # METAOS_MCP_URL is substituted into metaos-realm.json at import time
+            - configMapRef: { name: public-urls }
+          env:
+            - { name: KC_HTTP_ENABLED, value: "true" }
+            - { name: KC_PROXY_HEADERS, value: "xforwarded" }
+            - { name: KC_LOG_LEVEL, value: "INFO" }
+            - { name: KC_DB_URL, value: "jdbc:postgresql://main-cluster-rw.pg.svc.cluster.local:5432/metaos_keycloak" }
+            - { name: KC_DB_USERNAME, value: "metaos_keycloak" }
+            - name: KC_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: keycloak-secret, key: kc_db_password } }
+            # Temporary admin, created only while the master realm has none
+            - { name: KC_BOOTSTRAP_ADMIN_USERNAME, value: "admin" }
+            - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+              valueFrom: { secretKeyRef: { name: keycloak-secret, key: keycloak_admin_password } }
+            # The realm's "dev" user (metaos-realm.json) - a random password here rather than its "dev" default
+            - name: KEYCLOAK_DEV_PASSWORD
+              valueFrom: { secretKeyRef: { name: keycloak-secret, key: keycloak_dev_password } }
+
+          startupProbe:
+            httpGet: { path: /health/started, port: management }
+            periodSeconds: 5
+            failureThreshold: 36
+          livenessProbe:
+            httpGet: { path: /health/live, port: management }
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: { path: /health/ready, port: management }
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          resources:
+            requests: { cpu: 100m, memory: 512Mi }
+            limits: { memory: 1Gi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+  namespace: metaos-prod
+spec:
+  type: ClusterIP
+  selector: { app: keycloak }
+  ports:
+    - { name: http, port: 80, targetPort: http }
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: keycloak-ingress
+  namespace: metaos-prod
+  labels: { version: "1" }
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: metaos-auth.ogrodje.si
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: keycloak
+                port: { number: 80 }

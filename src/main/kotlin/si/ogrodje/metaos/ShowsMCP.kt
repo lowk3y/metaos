@@ -1,0 +1,100 @@
+package si.ogrodje.metaos
+
+import org.springframework.ai.mcp.annotation.McpTool
+import org.springframework.ai.mcp.annotation.McpToolParam
+import org.springframework.data.repository.findByIdOrNull
+import org.springframework.stereotype.Component
+import org.springframework.transaction.annotation.Transactional
+import java.util.UUID
+
+data class ShowDto(val id: UUID?, val name: String, val color: String?)
+
+private fun Show.toDto() = ShowDto(id, name, color)
+
+private val HEX_COLOR = Regex("#[0-9a-fA-F]{6}")
+
+private fun hexColor(color: String): String =
+    color.trim().also { require(HEX_COLOR.matches(it)) { "$color is not a hex color like #0404a4" } }
+
+@Component
+class ShowsMCP(
+    private val shows: ShowsRepository,
+    private val episodes: EpisodesRepository,
+) {
+
+    @McpTool(name = "list_shows", description = "List all shows by name")
+    fun list(): List<ShowDto> = shows.findAllByOrderByName().map { it.toDto() }
+
+    @McpTool(name = "get_show", description = "Find a show by its name (case-insensitive)")
+    fun get(@McpToolParam(description = "Show name, e.g. Bytes") name: String): ShowDto? =
+        shows.findByName(name)?.toDto()
+
+    @Transactional
+    @McpTool(name = "create_show", description = "Create a new show")
+    fun create(
+        @McpToolParam(description = "Unique show name (case-insensitive)") name: String,
+        @McpToolParam(description = "Color as hex RGB, e.g. #0404a4", required = false) color: String?,
+    ): ShowDto {
+        val trimmed = name.trim()
+        require(trimmed.isNotEmpty()) { "Name must not be blank" }
+        require(shows.findByName(trimmed) == null) { "Show $trimmed already exists" }
+        return shows.save(Show(name = trimmed, color = color?.let(::hexColor))).toDto()
+    }
+
+    @Transactional
+    @McpTool(name = "update_show", description = "Rename a show or change its color. Omitted fields are left as they are")
+    fun update(
+        @McpToolParam(description = "Show name (case-insensitive)") name: String,
+        @McpToolParam(description = "New unique show name", required = false) newName: String?,
+        @McpToolParam(description = "Color as hex RGB, e.g. #0404a4; empty to clear", required = false) color: String?,
+    ): ShowDto {
+        val show = requireNotNull(shows.findByName(name)) { "Show $name not found" }
+        newName?.trim()?.let { new ->
+            require(new.isNotEmpty()) { "Name must not be blank" }
+            require(shows.findByName(new).let { it == null || it == show }) { "Show $new already exists" }
+            show.name = new
+        }
+        color?.let { show.color = it.ifBlank { null }?.let(::hexColor) }
+        return show.toDto()
+    }
+
+    @Transactional
+    @McpTool(name = "delete_show", description = "Soft-delete a show. Its episodes are kept and taken out of the show")
+    fun delete(@McpToolParam(description = "Show name (case-insensitive)") name: String): ShowDto? =
+        shows.findByName(name)?.also { show ->
+            episodes.findByShowOrderByCodeDesc(show).forEach { it.show = null }
+            shows.delete(show)
+        }?.toDto()
+
+    @Transactional
+    @McpTool(
+        name = "restore_show",
+        description = "Bring back a soft-deleted show by its name (case-insensitive), with the episodes deleting it " +
+            "took out of it (unless they have been deleted or moved since)"
+    )
+    fun restore(@McpToolParam(description = "Show name (case-insensitive)") name: String): ShowDto {
+        require(shows.findByName(name) == null) { "Show $name already exists" }
+        val id = requireNotNull(shows.findDeletedIdByName(name)) { "There is no deleted show $name" }
+        shows.restore(id)
+        episodes.reattachToShow(id)
+        return requireNotNull(shows.findByIdOrNull(id)).toDto()
+    }
+
+    @Transactional(readOnly = true)
+    @McpTool(name = "list_show_episodes", description = "List the episodes of a show, latest season and episode first")
+    fun listEpisodes(@McpToolParam(description = "Show name (case-insensitive)") name: String): List<EpisodeDto> {
+        val show = requireNotNull(shows.findByName(name)) { "Show $name not found" }
+        return episodes.findByShowOrderByCodeDesc(show).map { it.toDto() }
+    }
+
+    @Transactional
+    @McpTool(name = "set_episode_show", description = "Move an episode into a show, or take it out of the show it is in")
+    fun setEpisodeShow(
+        @McpToolParam(description = EPISODE_REF) code: String,
+        @McpToolParam(description = "Show name (case-insensitive); omit to take the episode out of its show", required = false) show: String?,
+    ): EpisodeDto {
+        val episode = requireNotNull(episodes.findByRef(code)) { "Episode $code not found" }
+        episode.show = show?.let { requireNotNull(shows.findByName(it)) { "Show $it not found" } }
+        return episode.toDto()
+    }
+}

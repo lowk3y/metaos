@@ -4,6 +4,7 @@ import jakarta.persistence.*
 import org.hibernate.annotations.SoftDelete
 import org.hibernate.annotations.SoftDeleteType
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import java.util.UUID
 
@@ -25,7 +26,7 @@ class Person(
     override fun toString() = "Person(id=$id, name=$name)"
 }
 
-enum class Role { HOST, CO_HOST, GUEST }
+enum class Role { HOST, CO_HOST, GUEST, PRODUCER, CONSULTANT, DESIGNER }
 
 @Entity
 @Table(name = "episode_people")
@@ -56,11 +57,26 @@ class EpisodePerson(
 
 interface PeopleRepository : JpaRepository<Person, UUID> {
     fun findByEmail(email: String): Person?
+
+    // Soft-deleted people are hidden from JPA queries, so finding and restoring one takes native SQL
+    @Query("select count(*) > 0 from people where id = :id and deleted_at is not null", nativeQuery = true)
+    fun isDeleted(id: UUID): Boolean
+
+    @Query("select cast(email as text) from people where id = :id and deleted_at is not null", nativeQuery = true)
+    fun findDeletedEmail(id: UUID): String?
+
+    @Modifying(clearAutomatically = true)
+    @Query("update people set deleted_at = null where id = :id", nativeQuery = true)
+    fun restore(id: UUID): Int
 }
 
 interface EpisodePeopleRepository : JpaRepository<EpisodePerson, UUID> {
-    fun findByEpisodeAndPerson(episode: Episode, person: Person): EpisodePerson?
+    fun findByEpisodeAndPerson(episode: Episode, person: Person): List<EpisodePerson>
+    fun findByEpisodeAndPersonAndRole(episode: Episode, person: Person, role: Role): EpisodePerson?
 
     @Query("select ep from EpisodePerson ep join fetch ep.person where ep.episode = :episode")
     fun findByEpisodeWithPerson(episode: Episode): List<EpisodePerson>
+
+    @Query("select ep from EpisodePerson ep join fetch ep.episode e where ep.person = :person order by e.code desc")
+    fun findByPersonWithEpisode(person: Person): List<EpisodePerson>
 }
