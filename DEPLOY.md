@@ -147,6 +147,24 @@ API. It's not in the realm JSON, because the realm is imported only once and the
   allowed with it, denied again once it's removed; password logins unaffected; the Discord button redirects to
   `discord.com/oauth2/authorize` with scope `identify email`.
 
+## Google login
+
+[`keycloak/google_idp.sh`](keycloak/google_idp.sh) adds "Sign in with Google" the same way, with Keycloak's built-in
+Google provider. The role, the post-login flows and the admin API helpers are shared with the Discord script, in
+[`keycloak/approval_gate.sh`](keycloak/approval_gate.sh).
+
+- **OAuth client.** "Web application" client "Keycloak" in Google Cloud project `ogrodje-metaos`, with redirect URIs
+  `https://metaos-auth.ogrodje.si/realms/metaos/broker/google/endpoint` and
+  `http://localhost:8180/realms/metaos/broker/google/endpoint`. Its ID and secret are `GOOGLE_IDP_CLIENT_ID` and
+  `GOOGLE_IDP_CLIENT_SECRET` in `.envrc`. The project's "Desktop app" client "MetaOS" is a different one: it is for
+  the Drive bot (`google/refresh_token.sh`).
+- **Approval gate.** Same as Discord's, with its own flow `google-post-login`: denied until the user has `metaos-user`.
+- **Emails are trusted.** Google only hands out addresses it has verified, so approving a Google user is just granting
+  the role. Keycloak 26 still asks to verify an existing account with the same email before linking it.
+- **Publishing.** While the Google app is in *Testing*, only its test users can sign in with Google.
+- Verified on a throwaway Keycloak 26.8.1: both scripts create the same flow structure and are idempotent, and the
+  Google button redirects to `accounts.google.com/o/oauth2/v2/auth` with scope `openid profile email`.
+
 ## Next steps
 
 1. [ ] **DNS.** Add `metaos.ogrodje.si` and `metaos-auth.ogrodje.si` as proxied Cloudflare CNAMEs to
