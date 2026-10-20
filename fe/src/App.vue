@@ -32,29 +32,27 @@ watch(() => auth.authenticated, async (authenticated) => {
 <template>
   <header>
 
+    <!-- On phones the pages go on a line of their own, under the logo and signing in or out -->
     <div class="wrapper">
-      <nav aria-label="Main">
-        <RouterLink class="logo" to="/" aria-label="Ogrodje MetaOS, home"><img src="/favicon.png" alt=""/></RouterLink>
+      <RouterLink class="logo" to="/" aria-label="Ogrodje MetaOS, home"><img src="/favicon.png" alt=""/></RouterLink>
 
-        <div class="pages">
-          <RouterLink class="home" to="/">Home</RouterLink>
-          <RouterLink to="/episodes">Episodes</RouterLink>
-          <!-- The team's, so only for signed-in users -->
-          <RouterLink v-if="auth.authenticated" to="/ideas">Ideas</RouterLink>
-          <RouterLink to="/people">People</RouterLink>
-          <RouterLink to="/usage">Usage</RouterLink>
-        </div>
+      <nav class="pages" aria-label="Main">
+        <RouterLink to="/">Home</RouterLink>
+        <RouterLink to="/episodes">Episodes</RouterLink>
+        <!-- The team's, so only for signed-in users -->
+        <RouterLink v-if="auth.authenticated" to="/ideas">Ideas</RouterLink>
+        <RouterLink to="/people">People</RouterLink>
+        <RouterLink to="/usage">Usage</RouterLink>
       </nav>
 
       <div v-if="auth.ready" class="auth">
         <template v-if="auth.authenticated">
           <span class="name">{{ name }}</span>
-          <!-- On phones only the icon, so it fits beside the pages -->
-          <button type="button" class="button" aria-label="Sign out" title="Sign out" @click="auth.logout()">
-            <FontAwesomeIcon :icon="faArrowRightFromBracket"/><span class="long">Sign out</span>
+          <button type="button" class="button" @click="auth.logout()">
+            <FontAwesomeIcon :icon="faArrowRightFromBracket"/>Sign out
           </button>
         </template>
-        <!-- On phones only the providers' names, so both fit -->
+        <!-- On phones only the providers' names, so both fit beside the logo -->
         <template v-else>
           <button type="button" class="button" @click="auth.login('discord')">
             <FontAwesomeIcon :icon="faDiscord"/><span><span class="long">Sign in with </span>Discord</span>
@@ -99,15 +97,8 @@ header {
     padding: 0 24px;
     display: flex;
     flex-wrap: wrap;
-    justify-content: space-between;
     align-items: center;
-    column-gap: 24px;
-  }
-
-  nav {
-    display: flex;
-    align-items: center;
-    gap: 20px;
+    column-gap: 20px;
   }
 
   .logo {
@@ -136,10 +127,12 @@ header {
     }
   }
 
+  // At the right
   .auth {
     display: flex;
     gap: 12px;
     align-items: center;
+    margin-left: auto;
   }
 
   .name {
@@ -148,28 +141,54 @@ header {
     color: var(--secondary);
   }
 
-  // Phones: the page's narrower gutter, and the pages and buttons closer together, so they fit on one line
-  @media (max-width: 640px) {
+  // Narrower than 800 px, the pages and signing in don't both fit beside the logo: the logo and signing in or out go on
+  // a line, and under them the pages, as tabs whose first label, not its padding, lines up with the logo
+  @media (max-width: 800px) {
     .wrapper {
-      padding: 0 16px;
-      column-gap: 12px;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      grid-template-rows: 60px auto;
+      grid-template-areas: 'logo auth' 'pages pages';
+      min-height: 0;
     }
 
-    nav {
-      gap: 8px;
+    .logo {
+      grid-area: logo;
+    }
+
+    .pages {
+      grid-area: pages;
+      margin-left: -10px;
+
+      a {
+        padding: 10px;
+      }
+    }
+
+    .auth {
+      grid-area: auth;
+      justify-self: end;
+    }
+  }
+
+  // Phones: the page's narrower gutter, everything a little closer together, and only the providers' names
+  @media (max-width: 640px) {
+    .wrapper {
+      grid-template-rows: 56px auto;
+      column-gap: 12px;
+      padding: 0 16px;
     }
 
     .logo img {
       height: 30px;
     }
 
-    .pages a {
-      padding: 21px 8px;
-    }
+    .pages {
+      margin-left: -8px;
 
-    // The logo leads home too, and without this link the others fit beside it
-    .pages .home {
-      display: none;
+      a {
+        padding: 10px 8px;
+      }
     }
 
     .auth {
