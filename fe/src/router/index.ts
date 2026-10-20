@@ -15,6 +15,12 @@ const router = createRouter({
       name: 'episodes',
       component: () => import('../views/EpisodesView.vue'),
     },
+    // Everyone, with where they're online; for anyone not signed in, those on the released episodes
+    {
+      path: '/people',
+      name: 'people',
+      component: () => import('../views/PeopleView.vue'),
+    },
     // The episode ideas, behind sign-in
     {
       path: '/ideas',

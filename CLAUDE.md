@@ -49,6 +49,9 @@ yarn build      # type-check (vue-tsc) and build into fe/dist
   [`History.kt`](src/main/kotlin/si/ogrodje/metaos/History.kt) tells it.
 - Episode ideas (`IDEA`) have a page of their own, `/ideas`, from the `ideas` query, which needs `metaos:read`, as
   does its link in the header; the `episodes` query, and so the Episodes page, leaves them out.
+- The People page, `/people`, lists everyone by name (Slovenian order, past a "dr."), from the `people` query: who
+  they are, their roles and latest episodes, and links to their website and social profiles. Anyone not signed in
+  gets only those on the released episodes, with only those episodes; candidates are the team's.
 - Users sign in with keycloak-js (`fe/src/stores/auth.ts`), straight to Discord or Google (`idpHint`). On load it
   checks for a Keycloak session in a hidden iframe of `fe/public/silent-check-sso.html`, which is why MetaOS's pages
   may be framed by MetaOS itself (`X-Frame-Options: SAMEORIGIN`).

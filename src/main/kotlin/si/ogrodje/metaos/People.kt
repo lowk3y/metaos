@@ -127,4 +127,7 @@ interface EpisodePeopleRepository : JpaRepository<EpisodePerson, UUID> {
 
     @Query("select ep from EpisodePerson ep join fetch ep.episode e where ep.person = :person order by $LATEST_FIRST")
     fun findByPersonWithEpisode(person: Person): List<EpisodePerson>
+
+    @Query("select ep from EpisodePerson ep join fetch ep.episode e join fetch ep.person where ep.person in :people order by $LATEST_FIRST")
+    fun findByPeopleWithEpisode(people: Collection<Person>): List<EpisodePerson>
 }

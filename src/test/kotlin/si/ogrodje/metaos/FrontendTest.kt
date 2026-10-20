@@ -19,7 +19,7 @@ class FrontendTest @Autowired constructor(private val mvc: MockMvc) {
 
     @Test
     fun `answers the front-end's pages with index html, without a token`() {
-        listOf("/episodes", "/episodes/S05E08", "/ideas").forEach { path ->
+        listOf("/episodes", "/episodes/S05E08", "/ideas", "/people").forEach { path ->
             mvc.get(path) { accept(MediaType.TEXT_HTML) }.andExpect {
                 status { isOk() }
                 content { string(containsString("<div id=\"app\">")) }

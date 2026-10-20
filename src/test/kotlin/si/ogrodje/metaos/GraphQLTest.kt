@@ -369,9 +369,49 @@ class GraphQLTest @Autowired constructor(
             it.claim("email_verified", true)
         }
 
-        graphql("{ me { username emailVerified person { name } } }", token)
+        graphql("{ me { username emailVerified person { name episodes { roles } } } }", token)
+            .andExpect(jsonPath("$.errors").doesNotExist())
             .andExpect(jsonPath("$.data.me.username").value("tester"))
             .andExpect(jsonPath("$.data.me.emailVerified").value(true))
             .andExpect(jsonPath("$.data.me.person.name").value("GraphQL Tester"))
+            .andExpect(jsonPath("$.data.me.person.episodes", empty<Any>()))
+    }
+
+    @Test
+    fun `lists everyone by name to signed-in users, and those on the released episodes to anyone else`() {
+        val aired = released("gq-pp1", LocalDate.of(2001, 1, 1))
+        val idea = episodes.save(Episode(title = "gq-pp2, an idea", code = "gq-pp2"))
+        val guest = people.save(Person(name = "Čedo People", email = "cedo.people@example.com").apply {
+            bio = "Engineer @ Somewhere"
+            setSocialLink(SocialNetwork.LINKEDIN, "https://www.linkedin.com/in/cedo/")
+        })
+        val host = people.save(Person(name = "dr. Ana People", email = null))
+        val candidate = people.save(Person(name = "Cene People", email = null))
+        people.save(Person(name = "Dana People", email = null))
+        episodePeople.save(EpisodePerson(episode = aired, person = guest, role = Role.GUEST))
+        episodePeople.save(EpisodePerson(episode = idea, person = guest, role = Role.CANDIDATE))
+        episodePeople.save(EpisodePerson(episode = aired, person = host, role = Role.PRODUCER))
+        episodePeople.save(EpisodePerson(episode = aired, person = host, role = Role.HOST))
+        episodePeople.save(EpisodePerson(episode = aired, person = candidate, role = Role.CANDIDATE))
+        val query = "{ people { name bio linkedinUrl episodes { episode { code } roles } } }"
+        // Other tests' people are there too
+        fun ours(answer: ResultActions) = JsonPath.read<List<String>>(answer.andReturn().response.contentAsString, "$.data.people[*].name")
+            .filter { it.endsWith(" People") }
+
+        val signedIn = graphql(query, reader)
+            .andExpect(jsonPath("$.errors").doesNotExist())
+            .andExpect(jsonPath("$.data.people[?(@.name == 'Čedo People')].bio", contains("Engineer @ Somewhere")))
+            .andExpect(jsonPath("$.data.people[?(@.name == 'Čedo People')].linkedinUrl", contains("https://www.linkedin.com/in/cedo/")))
+            // The latest first, each once with all of the person's roles
+            .andExpect(jsonPath("$.data.people[?(@.name == 'Čedo People')].episodes[*].episode.code", contains("gq-pp2", "gq-pp1")))
+            .andExpect(jsonPath("$.data.people[?(@.name == 'dr. Ana People')].episodes[*].roles[*]", contains("HOST", "PRODUCER")))
+        // Slovenian order, past the title
+        assertEquals(listOf("dr. Ana People", "Cene People", "Čedo People", "Dana People"), ours(signedIn))
+
+        val anyone = graphql(query)
+            .andExpect(jsonPath("$.errors").doesNotExist())
+            .andExpect(jsonPath("$.data.people[?(@.name == 'Čedo People')].episodes[*].episode.code", contains("gq-pp1")))
+            .andExpect(jsonPath("$.data.people[?(@.name == 'Čedo People')].episodes[*].roles[*]", contains("GUEST")))
+        assertEquals(listOf("dr. Ana People", "Čedo People"), ours(anyone))
     }
 }

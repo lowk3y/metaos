@@ -17,8 +17,10 @@ import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.stereotype.Component
 import org.springframework.stereotype.Controller
 import java.net.URLEncoder
+import java.text.Collator
 import java.time.LocalDate
 import java.time.OffsetDateTime
+import java.util.Locale
 import java.util.UUID
 
 /*
@@ -304,6 +306,50 @@ class CurrentUserGraphQL(private val people: PeopleRepository) {
 
     @QueryMapping
     fun me(): CurrentUserDto? = currentJwt()?.toCurrentUserDto(people)
+
+    // The person as the rest of the API has them, so their episodes resolve as everyone else's do
+    @SchemaMapping(typeName = "CurrentUser")
+    fun person(user: CurrentUserDto): Person? = user.person?.id?.let(people::findByIdOrNull)
+}
+
+/** An episode a person is on, with all of their roles in it */
+data class EpisodeRolesDto(val episode: Episode, val roles: List<Role>)
+
+// Leading academic titles, which names are sorted past
+private val TITLE = Regex("^dr\\.\\s+", RegexOption.IGNORE_CASE)
+
+// By name as Slovenian sorts it (Č after C, ...), and dr. Matevž Pesek with the Ms
+private val byName: Comparator<Person> =
+    Collator.getInstance(Locale.forLanguageTag("sl")).let { collator -> compareBy(collator) { it.name.replace(TITLE, "") } }
+
+// What anyone may see of who's on an episode: anything but a candidate, on a released one
+private fun EpisodePerson.isPublic() = episode.status == EpisodeStatus.PUBLISHED && role != Role.CANDIDATE
+
+// Everyone, for the People page. Who's on the released episodes, and as what, is public, with their bios and links;
+// those only on episodes still being made, or on none yet, and candidates, are the team's.
+@Controller
+class PeopleGraphQL(private val people: PeopleRepository, private val episodePeople: EpisodePeopleRepository) {
+
+    @QueryMapping("people")
+    fun allPeople(): List<Person> {
+        val everyone = people.findAll()
+        val listed = if (signedIn() || everyone.isEmpty()) everyone
+        else episodePeople.findByPeopleWithEpisode(everyone).filter { it.isPublic() }.map { it.person }.distinct()
+        return listed.sortedWith(byName)
+    }
+
+    // The episodes of all the people in an answer, in one query, the latest first
+    @BatchMapping(typeName = "Person", field = "episodes")
+    fun episodes(people: List<Person>): Map<Person, List<EpisodeRolesDto>> {
+        val signedIn = signedIn()
+        val byPerson = episodePeople.findByPeopleWithEpisode(people)
+            .filter { signedIn || it.isPublic() }
+            .groupBy { it.person }
+        return people.associateWith { person ->
+            byPerson[person].orEmpty().groupBy { it.episode }
+                .map { (episode, assignments) -> EpisodeRolesDto(episode, assignments.map { it.role }.sorted()) }
+        }
+    }
 }
 
 /** require(...) failing, e.g. on an argument out of range, is the caller's mistake: its message goes back to them */

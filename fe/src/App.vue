@@ -41,6 +41,7 @@ watch(() => auth.authenticated, async (authenticated) => {
           <RouterLink to="/episodes">Episodes</RouterLink>
           <!-- The team's, so only for signed-in users -->
           <RouterLink v-if="auth.authenticated" to="/ideas">Ideas</RouterLink>
+          <RouterLink to="/people">People</RouterLink>
           <RouterLink to="/usage">Usage</RouterLink>
         </div>
       </nav>

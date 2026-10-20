@@ -1,7 +1,10 @@
 import type { IconDefinition, IconName } from '@fortawesome/fontawesome-svg-core'
-import { faPatreon, faSpotify, faYoutube } from '@fortawesome/free-brands-svg-icons'
-import { faPodcast } from '@fortawesome/free-solid-svg-icons'
+import {
+  faFacebook, faInstagram, faLinkedin, faPatreon, faSpotify, faXTwitter, faYoutube,
+} from '@fortawesome/free-brands-svg-icons'
+import { faGlobe, faPodcast } from '@fortawesome/free-solid-svg-icons'
 import type { Platform } from '@/episodes'
+import type { Network } from '@/people'
 
 /** Where episodes are published, in their brand colours. Font Awesome has no Apple Podcasts logo; its podcast icon looks much like it. */
 export const brands: Record<Platform, { icon: IconDefinition, color: string }> = {
@@ -9,6 +12,15 @@ export const brands: Record<Platform, { icon: IconDefinition, color: string }> =
   Spotify: { icon: faSpotify, color: '#1DB954' },
   'Apple Podcasts': { icon: faPodcast, color: '#9933CC' },
   Patreon: { icon: faPatreon, color: '#FF424D' },
+}
+
+/** Where people are online, in their brand colours; a website, which has none, in the accent links turn when pointed at */
+export const networks: Record<Network, { icon: IconDefinition, color: string }> = {
+  Website: { icon: faGlobe, color: 'var(--accent-text)' },
+  LinkedIn: { icon: faLinkedin, color: '#0A66C2' },
+  X: { icon: faXTwitter, color: '#000000' },
+  Instagram: { icon: faInstagram, color: '#E4405F' },
+  Facebook: { icon: faFacebook, color: '#0866FF' },
 }
 
 /** Koofr's logo, which Font Awesome hasn't got, as one of its icons ('fak' is its prefix for custom ones) */

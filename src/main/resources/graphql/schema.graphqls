@@ -29,6 +29,12 @@ type Query {
     "A recording session by its ID; null if there's none. Needs a signed-in user."
     session(id: ID!): Session
 
+    """
+    Everyone, by name, with who they are and where they're online. Anyone not signed in gets only those on the released
+    (PUBLISHED) episodes, as anything but a candidate.
+    """
+    people: [Person!]!
+
     "The signed-in user, from the bearer token; null without one"
     me: CurrentUser
 }
@@ -227,7 +233,28 @@ type CurrentUser {
     person: Person
 }
 
+"Someone on Ogrodje's episodes, e.g. a host or a guest"
 type Person {
     id: ID!
     name: String!
+    "A line about who they are, e.g. their role and company"
+    bio: String
+    "Their own website"
+    homepageUrl: String
+    linkedinUrl: String
+    "On Twitter or X"
+    twitterUrl: String
+    instagramUrl: String
+    facebookUrl: String
+    """
+    The episodes they're on, each once with all of their roles, the latest first. Anyone not signed in gets only the
+    released ones, without candidates.
+    """
+    episodes: [PersonEpisode!]!
+}
+
+"An episode a person is on, with their roles in it"
+type PersonEpisode {
+    episode: Episode!
+    roles: [Role!]!
 }

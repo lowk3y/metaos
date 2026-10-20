@@ -1,0 +1,22 @@
+<script setup lang="ts">
+import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
+import { networks } from '@/brands'
+import { type Network, type Person, socialLinks } from '@/people'
+
+// Where a person is online, each in its brand's colour when pointed at
+const props = defineProps<{
+  person: Pick<Person, 'name' | 'homepageUrl' | 'linkedinUrl' | 'twitterUrl' | 'instagramUrl' | 'facebookUrl'>
+}>()
+
+// Named, as a list of people has a row of these icons each
+function label(network: Network) {
+  return network === 'Website' ? `${props.person.name}'s website` : `${props.person.name} on ${network}`
+}
+</script>
+
+<template>
+  <a v-for="link in socialLinks(person)" :key="link.network" class="icon-link brand-link" :href="link.url"
+     :title="label(link.network)" :aria-label="label(link.network)" :style="{ '--brand': networks[link.network].color }">
+    <FontAwesomeIcon :icon="networks[link.network].icon"/>
+  </a>
+</template>
