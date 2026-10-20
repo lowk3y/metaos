@@ -29,6 +29,10 @@ class Episode(
     var airedDate: LocalDate? = null
     @Column(nullable = false) var addedDate: LocalDate = LocalDate.now()
 
+    // Other titles the title is A/B tested against. Named, as Hibernate would make titleB into titleb.
+    @Column(name = "title_b", columnDefinition = "text") var titleB: String? = null
+    @Column(name = "title_c", columnDefinition = "text") var titleC: String? = null
+
     // Eager, because Hibernate can't proxy a to-one whose target uses @SoftDelete.
     @ManyToOne
     @JoinColumn(name = "session_id")

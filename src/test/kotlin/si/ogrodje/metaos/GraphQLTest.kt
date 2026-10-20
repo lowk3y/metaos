@@ -39,11 +39,13 @@ class GraphQLTest @Autowired constructor(
     private val mvc: MockMvc,
     private val episodes: EpisodesRepository,
     private val people: PeopleRepository,
+    private val shows: ShowsRepository,
     private val episodePeople: EpisodePeopleRepository,
     private val sessions: SessionsRepository,
     private val episodeDocuments: EpisodeDocumentsRepository,
     private val sessionDocuments: SessionDocumentsRepository,
     private val episodeFolders: EpisodeKoofrFoldersRepository,
+    private val sessionFolders: SessionKoofrFoldersRepository,
     private val episodesMCP: EpisodesMCP,
     private val sessionsMCP: SessionsMCP,
     private val peopleMCP: PeopleMCP,
@@ -67,13 +69,15 @@ class GraphQLTest @Autowired constructor(
     fun `shows signed-in users an episode with all its details and its history`() {
         asMcpUser {
             episodesMCP.create(code = "gq-h1", title = "Draft title")
-            episodesMCP.update(code = "gq-h1", newCode = null, title = "Final title", summary = "About it", machineSummary = "AI on it")
+            episodesMCP.update(
+                code = "gq-h1", newCode = null, title = "Final title", titleB = "Other title", summary = "About it", machineSummary = "AI on it",
+            )
             episodesMCP.assignPerson("gq-h1", checkNotNull(peopleMCP.create(name = "History Host", email = null).id), Role.HOST)
         }
         episodeFolders.save(EpisodeKoofrFolder(checkNotNull(episodes.findByCode("gq-h1")), "place-1", "/Epizode/S05E04 - Jure in Jošt (SAP)"))
 
         graphql(
-            """{ episode(ref: "gq-h1") { title summary machineSummary addedDate koofrFolders { path url }
+            """{ episode(ref: "gq-h1") { title titleB titleC summary machineSummary addedDate koofrFolders { path url }
                  history { actor tool summary fields { field from to } } } }""",
             reader,
         )
@@ -81,6 +85,8 @@ class GraphQLTest @Autowired constructor(
             .andExpect(jsonPath("$.data.episode.koofrFolders[0].url").value(
                 "https://app.koofr.net/app/storage/place-1?path=%2FEpizode%2FS05E04%20-%20Jure%20in%20Jo%C5%A1t%20%28SAP%29"))
             .andExpect(jsonPath("$.data.episode.title").value("Final title"))
+            .andExpect(jsonPath("$.data.episode.titleB").value("Other title"))
+            .andExpect(jsonPath("$.data.episode.titleC").value(nullValue()))
             .andExpect(jsonPath("$.data.episode.machineSummary").value("AI on it"))
             .andExpect(jsonPath("$.data.episode.history[*].summary", contains(
                 "Created the episode", "Changed the episode", "Added History Host as host",
@@ -88,11 +94,12 @@ class GraphQLTest @Autowired constructor(
             )))
             .andExpect(jsonPath("$.data.episode.history[0].actor").value("ana"))
             .andExpect(jsonPath("$.data.episode.history[0].tool").value("create_episode"))
-            .andExpect(jsonPath("$.data.episode.history[1].fields[*].field", contains("Title", "Summary", "AI summary")))
+            .andExpect(jsonPath("$.data.episode.history[1].fields[*].field", contains("Title", "Title B", "Summary", "AI summary")))
             .andExpect(jsonPath("$.data.episode.history[1].fields[0].from").value("Draft title"))
             .andExpect(jsonPath("$.data.episode.history[1].fields[0].to").value("Final title"))
+            .andExpect(jsonPath("$.data.episode.history[1].fields[1].to").value("Other title"))
             // Too long to show
-            .andExpect(jsonPath("$.data.episode.history[1].fields[1].to").value(null as Any?))
+            .andExpect(jsonPath("$.data.episode.history[1].fields[2].to").value(null as Any?))
     }
 
     @Test
@@ -119,7 +126,7 @@ class GraphQLTest @Autowired constructor(
     fun `keeps episodes' and sessions' details from anyone not signed in`() {
         val session = sessionsMCP.create(LocalDate.of(2099, 8, 1), location = "Closed Hall", address = "Hidden street 2")
         episodesMCP.create(code = "gq-h4", title = "Private")
-        val episode = checkNotNull(episodes.findByCode("gq-h4")).apply { machineSummary = "AI on it"; this.session = sessions.findById(checkNotNull(session.id)).get() }
+        val episode = checkNotNull(episodes.findByCode("gq-h4")).apply { machineSummary = "AI on it"; titleB = "Other title"; this.session = sessions.findById(checkNotNull(session.id)).get() }
         episodes.save(episode)
 
         graphql("""{ episode(ref: "gq-h4") { title } }""")
@@ -131,6 +138,7 @@ class GraphQLTest @Autowired constructor(
         val saved = checkNotNull(episodes.findByCode("gq-h4"))
         val savedSession = sessions.findById(checkNotNull(session.id)).get()
         assertNull(details.machineSummary(saved))
+        assertNull(details.titleB(saved))
         assertEquals(emptyList(), details.episodeHistory(saved))
         assertNull(details.address(savedSession))
         assertEquals(emptyList(), details.sessionEpisodes(savedSession))
@@ -155,6 +163,29 @@ class GraphQLTest @Autowired constructor(
             youtubeUrl = "https://www.youtube.com/watch?v=$code"
         }
     )
+
+    @Test
+    fun `lists episodes with their and their sessions' Koofr folders, which only signed-in users get`() {
+        val day = sessions.save(Session(LocalDate.of(2001, 2, 3), location = "gq-k", address = null))
+        val linked = released("gq-k1", LocalDate.of(2001, 2, 4)).apply { session = day }.let(episodes::save)
+        released("gq-k2", LocalDate.of(2001, 2, 5))
+        episodeFolders.save(EpisodeKoofrFolder(linked, "place-1", "/Epizode/gq-k1 b"))
+        episodeFolders.save(EpisodeKoofrFolder(linked, "place-1", "/Epizode/gq-k1 a"))
+        sessionFolders.save(SessionKoofrFolder(day, "place-1", "/Snemanja/2001-02-03"))
+        val query = "{ episodes { code koofrFolders { path url } session { koofrFolders { path } } } }"
+
+        // Each episode its own, by path
+        graphql(query, reader)
+            .andExpect(jsonPath("$.errors").doesNotExist())
+            .andExpect(jsonPath("$.data.episodes[?(@.code == 'gq-k1')].koofrFolders[*].path", contains("/Epizode/gq-k1 a", "/Epizode/gq-k1 b")))
+            .andExpect(jsonPath("$.data.episodes[?(@.code == 'gq-k1')].session.koofrFolders[*].path", contains("/Snemanja/2001-02-03")))
+            .andExpect(jsonPath("$.data.episodes[?(@.code == 'gq-k2')].koofrFolders[*]", empty<Any>()))
+
+        graphql(query)
+            .andExpect(jsonPath("$.errors").doesNotExist())
+            .andExpect(jsonPath("$.data.episodes[?(@.code == 'gq-k1')].koofrFolders[*]", empty<Any>()))
+            .andExpect(jsonPath("$.data.episodes[?(@.code == 'gq-k1')].session.koofrFolders[*]", empty<Any>()))
+    }
 
     @Test
     fun `lists every episode to signed-in users, and only the released ones to anyone else`() {
@@ -192,10 +223,15 @@ class GraphQLTest @Autowired constructor(
         episodePeople.save(EpisodePerson(episode = latest, person = host, role = Role.PRODUCER))
         episodePeople.save(EpisodePerson(episode = latest, person = host, role = Role.HOST))
         episodeDocuments.save(EpisodeDocument(latest, "doc-of-gq-3"))
+        episodes.save(latest.apply { show = shows.save(Show(name = "gq Show", color = "#0404a4")) })
 
-        graphql("{ releasedEpisodes { code title airedDate youtubeUrl people { name roles } documents { url } } }")
+        graphql("{ releasedEpisodes { code title show showColor airedDate youtubeUrl people { name roles } documents { url } } }")
             .andExpect(jsonPath("$.errors").doesNotExist())
             .andExpect(jsonPath("$.data.releasedEpisodes[*].code", contains("gq-3", "gq-2", "gq-1")))
+            .andExpect(jsonPath("$.data.releasedEpisodes[0].show").value("gq Show"))
+            .andExpect(jsonPath("$.data.releasedEpisodes[0].showColor").value("#0404a4"))
+            .andExpect(jsonPath("$.data.releasedEpisodes[1].show").value(nullValue()))
+            .andExpect(jsonPath("$.data.releasedEpisodes[1].showColor").value(nullValue()))
             .andExpect(jsonPath("$.data.releasedEpisodes[0].airedDate").value("2099-03-01"))
             .andExpect(jsonPath("$.data.releasedEpisodes[0].youtubeUrl").value("https://www.youtube.com/watch?v=gq-3"))
             // Each person once, with all of their roles; hosts first

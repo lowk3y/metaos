@@ -66,6 +66,9 @@ class EpisodesGraphQL(private val episodes: EpisodesRepository, private val epis
     @SchemaMapping(typeName = "Episode")
     fun show(episode: Episode): String? = episode.show?.name
 
+    @SchemaMapping(typeName = "Episode")
+    fun showColor(episode: Episode): String? = episode.show?.color
+
     // The people of all the episodes in an answer, in one query
     @BatchMapping(typeName = "Episode")
     fun people(episodes: List<Episode>): Map<Episode, List<EpisodePersonDto>> {
@@ -110,7 +113,7 @@ private fun queryValue(value: String) = URLEncoder.encode(value, Charsets.UTF_8)
 private fun koofrUrl(place: String, path: String) = "https://app.koofr.net/app/storage/$place?path=${queryValue(path)}"
 
 /** A Koofr folder linked to an episode or session: a place shared with the bot, named when Koofr answers, and a path */
-data class KoofrFolderLinkDto(val place: String, val placeName: String?, val path: String) {
+data class KoofrFolderLinkDto(val place: String, val path: String) {
     val url = koofrUrl(place, path)
 }
 
@@ -126,11 +129,7 @@ data class KoofrPhotoDto(val place: String, val path: String, val name: String) 
 class DetailsGraphQL(
     private val episodeRepository: EpisodesRepository,
     private val sessionRepository: SessionsRepository,
-    private val episodeFolders: EpisodeKoofrFoldersRepository,
-    private val sessionFolders: SessionKoofrFoldersRepository,
     private val history: History,
-    private val koofr: ObjectProvider<Koofr>,
-    private val photos: ObjectProvider<KoofrPhotos>,
 ) {
 
     @QueryMapping
@@ -144,9 +143,12 @@ class DetailsGraphQL(
     @SchemaMapping(typeName = "Episode")
     fun machineSummary(episode: Episode): String? = episode.machineSummary.takeIf { signedIn() }
 
-    @SchemaMapping(typeName = "Episode", field = "koofrFolders")
-    fun episodeKoofrFolders(episode: Episode): List<KoofrFolderLinkDto> =
-        if (signedIn()) folders(episodeFolders.findByEpisode(episode).map { it.place to it.path }) else emptyList()
+    // The titles the title is A/B tested against are the team's, until one of them wins
+    @SchemaMapping(typeName = "Episode")
+    fun titleB(episode: Episode): String? = episode.titleB.takeIf { signedIn() }
+
+    @SchemaMapping(typeName = "Episode")
+    fun titleC(episode: Episode): String? = episode.titleC.takeIf { signedIn() }
 
     @SchemaMapping(typeName = "Episode", field = "history")
     fun episodeHistory(episode: Episode): List<HistoryEntryDto> =
@@ -160,13 +162,39 @@ class DetailsGraphQL(
         if (signedIn()) episodeRepository.findBySessionOrderByCodeDesc(session).sortedWith(compareBy(nullsLast()) { it.code })
         else emptyList()
 
-    @SchemaMapping(typeName = "Session", field = "koofrFolders")
-    fun sessionKoofrFolders(session: Session): List<KoofrFolderLinkDto> =
-        if (signedIn()) folders(sessionFolders.findBySession(session).map { it.place to it.path }) else emptyList()
-
     @SchemaMapping(typeName = "Session", field = "history")
     fun sessionHistory(session: Session): List<HistoryEntryDto> =
         if (signedIn()) history.of(checkNotNull(session.id)) else emptyList()
+}
+
+// Koofr folders are the team's too, so others get none. Lists of episodes have them as well, so they're batched, and
+// Koofr itself, slower than the database, is only asked for what a query wants: place names and photos.
+@Controller
+class KoofrGraphQL(
+    private val episodeFolders: EpisodeKoofrFoldersRepository,
+    private val sessionFolders: SessionKoofrFoldersRepository,
+    private val koofr: ObjectProvider<Koofr>,
+    private val photos: ObjectProvider<KoofrPhotos>,
+) {
+
+    @BatchMapping(typeName = "Episode", field = "koofrFolders")
+    fun episodeKoofrFolders(episodes: List<Episode>): Map<Episode, List<KoofrFolderLinkDto>> {
+        val byEpisode = if (signedIn()) episodeFolders.findByEpisodeIds(episodes.mapNotNull { it.id }).groupBy { it.episode } else emptyMap()
+        return episodes.associateWith { episode -> byEpisode[episode].orEmpty().map { KoofrFolderLinkDto(it.place, it.path) } }
+    }
+
+    @BatchMapping(typeName = "Session", field = "koofrFolders")
+    fun sessionKoofrFolders(sessions: List<Session>): Map<Session, List<KoofrFolderLinkDto>> {
+        val bySession = if (signedIn()) sessionFolders.findBySessionIds(sessions.mapNotNull { it.id }).groupBy { it.session } else emptyMap()
+        return sessions.associateWith { session -> bySession[session].orEmpty().map { KoofrFolderLinkDto(it.place, it.path) } }
+    }
+
+    // Places by name, with one call for all the folders, when Koofr is on and answers; a page doesn't fail for want of a name
+    @BatchMapping(typeName = "KoofrFolder", field = "placeName")
+    fun placeNames(folders: List<KoofrFolderLinkDto>): Map<KoofrFolderLinkDto, String?> {
+        val names = runCatching { koofr.ifAvailable?.places()?.associate { it.id to it.name } }.getOrNull().orEmpty()
+        return folders.associateWith { names[it.place] }
+    }
 
     // None when Koofr is off or doesn't answer: a page doesn't fail for want of photos
     @SchemaMapping(typeName = "KoofrFolder", field = "photos")
@@ -176,13 +204,65 @@ class DetailsGraphQL(
         return runCatching { photos.of(folder.place, folder.path, limit) }.getOrDefault(emptyList())
             .map { KoofrPhotoDto(it.place, it.path, it.name) }
     }
+}
 
-    // Places by name when Koofr is on and answers; a page doesn't fail for want of a name
-    private fun folders(links: List<Pair<String, String>>): List<KoofrFolderLinkDto> {
-        if (links.isEmpty()) return emptyList()
-        val names = runCatching { koofr.ifAvailable?.places()?.associate { it.id to it.name } }.getOrNull().orEmpty()
-        return links.map { (place, path) -> KoofrFolderLinkDto(place, names[place], path) }
-            .sortedWith(compareBy({ it.placeName }, { it.path }))
+// A folder by its path in Dropbox's web app, for one without a link for members yet. Paths there are in the viewer's own
+// Dropbox, so it's right only for those who have its shared folder where the bot has it. Its home, without the place.
+private fun dropboxUrl(place: DropboxPlace?, path: String): String {
+    if (place == null) return "https://www.dropbox.com/home"
+    val inDropbox = ((place.path ?: "/${place.name}") + path).trimEnd('/')
+    return "https://www.dropbox.com/home" + inDropbox.split('/').joinToString("/") { queryValue(it) }
+}
+
+/**
+ * A Dropbox folder linked to an episode or session: where it is now, found by its ID, or where it was linked when
+ * Dropbox doesn't answer; missing once it's gone from its shared folder. Its link for members, which opens it for all
+ * of them, or else its path in Dropbox's web app.
+ */
+data class DropboxFolderLinkDto(val place: String, val placeName: String?, val path: String, val missing: Boolean, val url: String)
+
+// Dropbox folders are the team's too, so others get none. Lists of episodes have them as well, so they're batched, and
+// found by their IDs in DropboxFolderIndex, which asks Dropbox once per shared folder and minute.
+@Controller
+class DropboxGraphQL(
+    private val episodeFolders: EpisodeDropboxFoldersRepository,
+    private val sessionFolders: SessionDropboxFoldersRepository,
+    private val index: ObjectProvider<DropboxFolderIndex>,
+) {
+
+    @BatchMapping(typeName = "Episode", field = "dropboxFolders")
+    fun episodeDropboxFolders(episodes: List<Episode>): Map<Episode, List<DropboxFolderLinkDto>> {
+        val byEpisode = if (signedIn()) episodeFolders.findByEpisodeIds(episodes.mapNotNull { it.id }).groupBy { it.episode } else emptyMap()
+        val found = Found(byEpisode.values.flatten().map { it.place })
+        return episodes.associateWith { episode ->
+            byEpisode[episode].orEmpty().map { found.link(it.place, it.folderId, it.path, it.url) }.sortedBy { it.path }
+        }
+    }
+
+    @BatchMapping(typeName = "Session", field = "dropboxFolders")
+    fun sessionDropboxFolders(sessions: List<Session>): Map<Session, List<DropboxFolderLinkDto>> {
+        val bySession = if (signedIn()) sessionFolders.findBySessionIds(sessions.mapNotNull { it.id }).groupBy { it.session } else emptyMap()
+        val found = Found(bySession.values.flatten().map { it.place })
+        return sessions.associateWith { session ->
+            bySession[session].orEmpty().map { found.link(it.place, it.folderId, it.path, it.url) }.sortedBy { it.path }
+        }
+    }
+
+    // What Dropbox says about the places of some links; nothing when it's off or doesn't answer, as a page doesn't fail
+    // for want of where a folder is now
+    private inner class Found(places: Collection<String>) {
+        private val index = this@DropboxGraphQL.index.ifAvailable?.takeIf { places.isNotEmpty() }
+        private val shared = index?.let { runCatching { it.places() }.getOrNull() }?.associateBy { it.id }
+        private val folders = places.toSet().filter { shared?.containsKey(it) == true }
+            .associateWith { place -> runCatching { index!!.folders(place) }.getOrNull() }
+
+        fun link(place: String, folderId: String, linkedPath: String, url: String?): DropboxFolderLinkDto {
+            val inPlace = folders[place]
+            val path = inPlace?.get(folderId) ?: linkedPath
+            // Missing when Dropbox says the place isn't shared with the bot anymore, or the folder isn't in it
+            val missing = shared != null && (place !in shared || inPlace != null && folderId !in inPlace)
+            return DropboxFolderLinkDto(place, shared?.get(place)?.name, path, missing, url ?: dropboxUrl(shared?.get(place), path))
+        }
     }
 }
 

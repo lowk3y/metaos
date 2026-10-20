@@ -127,6 +127,18 @@ class EpisodesTest @Autowired constructor(
     }
 
     @Test
+    fun `sets and clears alternative titles, which only get_episode returns`() {
+        episodesRepository.saveAndFlush(Episode(title = "Title A", code = "ep-1901"))
+
+        val updated = episodesMCP.update("ep-1901", newCode = null, title = null, titleB = " Title B ", titleC = "Title C")
+        assertEquals(Triple("Title A", "Title B", "Title C"), Triple(updated.title, updated.titleB, updated.titleC))
+
+        episodesMCP.update("ep-1901", newCode = null, title = null, titleB = "", titleC = null)
+        val episode = assertNotNull(episodesMCP.get("ep-1901"))
+        assertEquals(null to "Title C", episode.titleB to episode.titleC)
+    }
+
+    @Test
     fun `sets and clears summaries, which only get_episode returns`() {
         episodesRepository.saveAndFlush(Episode(title = "Summarized", code = "ep-1701"))
 

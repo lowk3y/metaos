@@ -72,16 +72,17 @@ class AuditLog(
 
     /**
      * Every change to an episode, person, session or show, oldest first, with people's roles on an episode, the
-     * documents and Koofr folders linked to an episode or session, and episodes moving in and out of a session or show
+     * documents, Koofr and Dropbox folders linked to an episode or session, and episodes moving in and out of a session
+     * or show
      */
     fun history(id: UUID): List<AuditRow> =
         jdbcTemplate.query(
             """
             select * from audit_log
             where row_id = ?
-               or (table_name in ('episode_people', 'episode_documents', 'episode_koofr_folders')
+               or (table_name in ('episode_people', 'episode_documents', 'episode_koofr_folders', 'episode_dropbox_folders')
                    and ? in (old_row ->> 'episode_id', new_row ->> 'episode_id', old_row ->> 'person_id', new_row ->> 'person_id'))
-               or (table_name in ('session_documents', 'session_koofr_folders')
+               or (table_name in ('session_documents', 'session_koofr_folders', 'session_dropbox_folders')
                    and ? in (old_row ->> 'session_id', new_row ->> 'session_id'))
                or (table_name = 'episodes'
                    and ((old_row ->> 'session_id' is distinct from new_row ->> 'session_id'
@@ -103,8 +104,8 @@ class AuditMCP(private val auditLog: AuditLog) {
     @McpTool(
         name = "get_history",
         description = "List every change to an episode, person, session or show, oldest first: what changed, when, " +
-            "by whom, through which MCP client and tool. Includes people's roles on an episode, the documents and " +
-            "Koofr folders linked to an episode or session and episodes moving in and out of a session or show. Soft " +
+            "by whom, through which MCP client and tool. Includes people's roles on an episode, the documents, Koofr " +
+            "and Dropbox folders linked to an episode or session and episodes moving in and out of a session or show. Soft " +
             "deletes show up as updates that set deleted_at"
     )
     fun history(@McpToolParam(description = "ID of the episode, person, session or show") id: UUID): List<ChangeDto> =

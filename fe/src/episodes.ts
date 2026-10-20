@@ -31,12 +31,17 @@ export interface Session {
   date: string
   location: string | null
   documents: GoogleDoc[]
+  koofrFolders: KoofrFolderLink[]
+  dropboxFolders: DropboxFolderLink[]
 }
 
 export interface Episode {
   id: string
   code: string | null
   title: string
+  show: string | null
+  // Its show's, as hex RGB
+  showColor: string | null
   status: EpisodeStatus
   session: Session | null
   recordingDate: string | null
@@ -47,6 +52,8 @@ export interface Episode {
   patreonUrl: string | null
   people: EpisodePerson[]
   documents: GoogleDoc[]
+  koofrFolders: KoofrFolderLink[]
+  dropboxFolders: DropboxFolderLink[]
 }
 
 /** A photo in a Koofr folder: its thumbnail, from MetaOS with the sign-in token, and its folder in Koofr */
@@ -65,6 +72,24 @@ export interface KoofrFolder {
   url: string
   photos: KoofrPhoto[]
 }
+
+/** A Koofr folder as lists have it, for a link; only signed-in users get them */
+export type KoofrFolderLink = Pick<KoofrFolder, 'path' | 'url'>
+
+/**
+ * A Dropbox folder in a folder shared with Ogrodje's bot: where it is now, as it's linked by its Dropbox ID, and where
+ * it opens; missing once it's gone from there
+ */
+export interface DropboxFolder {
+  place: string
+  placeName: string | null
+  path: string
+  missing: boolean
+  url: string
+}
+
+/** A Dropbox folder as lists have it, for a link; only signed-in users get them */
+export type DropboxFolderLink = Pick<DropboxFolder, 'path' | 'url'>
 
 /** One field of a change; from and to are null when there's nothing short to show, e.g. a summary */
 export interface FieldChange {
@@ -85,11 +110,14 @@ export interface Change {
 
 /** An episode with everything about it, for its page */
 export interface EpisodeDetails extends Episode {
-  show: string | null
+  // What the title is A/B tested against
+  titleB: string | null
+  titleC: string | null
   summary: string | null
   machineSummary: string | null
   addedDate: string
   koofrFolders: KoofrFolder[]
+  dropboxFolders: DropboxFolder[]
   history: Change[]
 }
 
@@ -98,6 +126,7 @@ export interface SessionDetails extends Session {
   address: string | null
   episodes: Episode[]
   koofrFolders: KoofrFolder[]
+  dropboxFolders: DropboxFolder[]
   history: Change[]
 }
 
@@ -105,6 +134,7 @@ export interface SessionDetails extends Session {
 export const PHOTOS = 7
 
 export const KOOFR_FIELDS = `koofrFolders { place placeName path url photos(limit: ${PHOTOS}) { name path thumbnail url } }`
+export const DROPBOX_FIELDS = 'dropboxFolders { place placeName path missing url }'
 
 /** The first few photos of an episode's or session's Koofr folders */
 export function photosOf(folders: KoofrFolder[], limit = PHOTOS) {
@@ -123,10 +153,12 @@ export function sessionPath(session: Pick<Session, 'id'>) {
 
 /** The fields of an Episode, for a query */
 export const EPISODE_FIELDS = `
-  id code title status recordingDate airedDate youtubeUrl spotifyUrl applePodcastsUrl patreonUrl
-  session { id date location documents { fileId url } }
+  id code title show showColor status recordingDate airedDate youtubeUrl spotifyUrl applePodcastsUrl patreonUrl
+  session { id date location documents { fileId url } koofrFolders { path url } dropboxFolders { path url } }
   people { personId name roles }
   documents { fileId url }
+  koofrFolders { path url }
+  dropboxFolders { path url }
 `
 
 const platforms = {

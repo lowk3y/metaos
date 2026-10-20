@@ -3,6 +3,9 @@ import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
 import DocLinks from '@/components/DocLinks.vue'
+import DropboxLinks from '@/components/DropboxLinks.vue'
+import KoofrLinks from '@/components/KoofrLinks.vue'
+import ShowBadge from '@/components/ShowBadge.vue'
 import { brands } from '@/brands'
 import { type Episode, episodePath, formatDate, links, roleName, statusName } from '@/episodes'
 import { useAuthStore } from '@/stores/auth'
@@ -41,12 +44,15 @@ const date = computed(() => {
       </p>
     </div>
     <div class="side">
+      <ShowBadge v-if="episode.show" :name="episode.show" :color="episode.showColor"/>
       <span v-if="!released" class="status">{{ statusName(episode.status) }}</span>
       <a v-for="link in links(episode)" :key="link.platform" class="icon-link" :href="link.url" :title="link.platform"
          :aria-label="link.platform" :style="{ color: brands[link.platform].color }">
         <FontAwesomeIcon :icon="brands[link.platform].icon"/>
       </a>
       <DocLinks :documents="episode.documents"/>
+      <KoofrLinks :folders="episode.koofrFolders"/>
+      <DropboxLinks :folders="episode.dropboxFolders"/>
     </div>
   </li>
 </template>
@@ -103,6 +109,11 @@ const date = computed(() => {
   white-space: nowrap;
   border: 1px solid var(--hairline);
   border-radius: 999px;
+
+  // Apart from the show's badge, as they're about different things
+  &:not(:first-child) {
+    margin-left: 2px;
+  }
 }
 
 // On phones the status and links go under the title

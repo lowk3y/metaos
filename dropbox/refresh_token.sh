@@ -19,8 +19,9 @@ set -euo pipefail
 : "${DROPBOX_APP_KEY:?}" "${DROPBOX_APP_SECRET:?}"
 BOT_EMAIL=${DROPBOX_BOT_EMAIL:-iva.ogrodje@gmail.com}
 
-# Who the bot is, the files in the folders shared with it (not deleting), and which folders those are
-SCOPES=(account_info.read files.metadata.read files.content.read files.content.write sharing.read)
+# Who the bot is, the files in the folders shared with it (not deleting), which folders those are, and links to what's
+# in them that only their members can open
+SCOPES=(account_info.read files.metadata.read files.content.read files.content.write sharing.read sharing.write)
 
 # token_access_type=offline, or Dropbox leaves the refresh token out
 QUERY=$(jq -rn \

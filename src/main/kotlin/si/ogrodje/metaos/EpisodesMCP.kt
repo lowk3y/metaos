@@ -30,6 +30,8 @@ data class EpisodeDetailsDto(
     val id: UUID?,
     val code: String?,
     val title: String,
+    val titleB: String?,
+    val titleC: String?,
     val status: EpisodeStatus,
     val sessionId: UUID?,
     val show: String?,
@@ -52,7 +54,8 @@ fun Episode.toDto() = EpisodeDto(
 )
 
 private fun Episode.toDetailsDto() = EpisodeDetailsDto(
-    id = id, code = code, title = title, status = status, sessionId = session?.id, show = show?.name,
+    id = id, code = code, title = title, titleB = titleB, titleC = titleC, status = status, sessionId = session?.id,
+    show = show?.name,
     recordingDate = recordingDate, airedDate = airedDate, addedDate = addedDate,
     youtubeUrl = youtubeUrl, spotifyUrl = spotifyUrl, applePodcastsUrl = applePodcastsUrl, patreonUrl = patreonUrl,
     summary = summary, machineSummary = machineSummary,
@@ -107,12 +110,17 @@ class EpisodesMCP(
     @Transactional
     @McpTool(
         name = "update_episode",
-        description = "Change an episode's code, title, summaries or dates. Omitted fields are left as they are"
+        description = "Change an episode's code, title, alternative titles (B and C, for A/B tests), summaries or dates. " +
+            "Omitted fields are left as they are"
     )
     fun update(
         @McpToolParam(description = EPISODE_REF) code: String,
         @McpToolParam(description = "New unique episode code", required = false) newCode: String?,
         @McpToolParam(description = "New title", required = false) title: String?,
+        @McpToolParam(description = "Alternative title B, which the title is A/B tested against; empty to clear", required = false)
+        titleB: String? = null,
+        @McpToolParam(description = "Alternative title C, which the title is A/B tested against; empty to clear", required = false)
+        titleC: String? = null,
         @McpToolParam(description = "Description of the episode, in Markdown; empty to clear", required = false)
         summary: String? = null,
         @McpToolParam(description = "AI-generated summary of the episode, in Markdown; empty to clear", required = false)
@@ -134,6 +142,8 @@ class EpisodesMCP(
             require(it.isNotBlank()) { "Title must not be blank" }
             episode.title = it.trim()
         }
+        titleB?.let { episode.titleB = it.trim().ifEmpty { null } }
+        titleC?.let { episode.titleC = it.trim().ifEmpty { null } }
         summary?.let { episode.summary = it.trim().ifEmpty { null } }
         machineSummary?.let { episode.machineSummary = it.trim().ifEmpty { null } }
         recordingDate?.let { episode.recordingDate = it }

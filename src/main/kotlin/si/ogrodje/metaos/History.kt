@@ -25,8 +25,8 @@ private val DATE = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.UK)
 
 // The columns people care about, in the order they're shown, by their names
 private val EPISODE_COLUMNS = linkedMapOf(
-    "code" to "Code", "title" to "Title", "status" to "Status", "show_id" to "Show", "session_id" to "Session",
-    "recording_date" to "Recording date", "aired_date" to "Aired", "added_date" to "Added",
+    "code" to "Code", "title" to "Title", "title_b" to "Title B", "title_c" to "Title C", "status" to "Status",
+    "show_id" to "Show", "session_id" to "Session", "recording_date" to "Recording date", "aired_date" to "Aired", "added_date" to "Added",
     "youtube_url" to "YouTube", "spotify_url" to "Spotify", "apple_podcasts_url" to "Apple Podcasts",
     "patreon_url" to "Patreon", "summary" to "Summary", "machine_summary" to "AI summary",
 )
@@ -82,7 +82,8 @@ private class Names(val people: Map<String, String>, val shows: Map<String, Stri
         "episode_people" -> role(row)
         "episode_documents", "session_documents" ->
             Described(if (row.operation == "DELETE") "Unlinked a Google Doc" else "Linked a Google Doc")
-        "episode_koofr_folders", "session_koofr_folders" -> folder(row)
+        "episode_koofr_folders", "session_koofr_folders" -> folder(row, "Koofr")
+        "episode_dropbox_folders", "session_dropbox_folders" -> folder(row, "Dropbox")
         else -> Described("Changed ${row.table}")
     }
 
@@ -131,9 +132,11 @@ private class Names(val people: Map<String, String>, val shows: Map<String, Stri
         }
     }
 
-    private fun folder(row: AuditRow): Described = when (row.operation) {
-        "INSERT" -> Described("Linked the Koofr folder ${row.new["path"]}")
-        "DELETE" -> Described("Unlinked the Koofr folder ${row.old["path"]}")
-        else -> Described("Moved a Koofr folder", listOf(FieldChangeDto("Path", row.old["path"]?.toString(), row.new["path"]?.toString())))
+    // A Dropbox folder's link changes only to get a link to it
+    private fun folder(row: AuditRow, service: String): Described = when {
+        row.operation == "INSERT" -> Described("Linked the $service folder ${row.new["path"]}")
+        row.operation == "DELETE" -> Described("Unlinked the $service folder ${row.old["path"]}")
+        row.old["path"] == row.new["path"] -> Described("Made a link to the $service folder ${row.new["path"]}")
+        else -> Described("Moved a $service folder", listOf(FieldChangeDto("Path", row.old["path"]?.toString(), row.new["path"]?.toString())))
     }
 }

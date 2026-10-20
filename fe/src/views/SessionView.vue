@@ -2,12 +2,13 @@
 import { ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import DocLinks from '@/components/DocLinks.vue'
+import DropboxFolderList from '@/components/DropboxFolderList.vue'
 import EpisodeItem from '@/components/EpisodeItem.vue'
 import HistoryTimeline from '@/components/HistoryTimeline.vue'
 import KoofrFolderList from '@/components/KoofrFolderList.vue'
 import PhotoStrip from '@/components/PhotoStrip.vue'
 import SignInPrompt from '@/components/SignInPrompt.vue'
-import { EPISODE_FIELDS, formatDate, HISTORY_FIELDS, KOOFR_FIELDS, photosOf, type SessionDetails } from '@/episodes'
+import { DROPBOX_FIELDS, EPISODE_FIELDS, formatDate, HISTORY_FIELDS, KOOFR_FIELDS, photosOf, type SessionDetails } from '@/episodes'
 import { errorMessage, graphql } from '@/graphql'
 import { useAuthStore } from '@/stores/auth'
 
@@ -30,7 +31,7 @@ watch([() => route.params.id, () => auth.authenticated], async ([id, authenticat
   try {
     const data = await graphql<{ session: SessionDetails | null }>(`query ($id: ID!) {
       session(id: $id) {
-        id date location address documents { fileId url } ${KOOFR_FIELDS} ${HISTORY_FIELDS}
+        id date location address documents { fileId url } ${KOOFR_FIELDS} ${DROPBOX_FIELDS} ${HISTORY_FIELDS}
         episodes { ${EPISODE_FIELDS} }
       }
     }`, { id: String(id) })
@@ -58,7 +59,8 @@ watch([() => route.params.id, () => auth.authenticated], async ([id, authenticat
         <p v-if="session.location" class="subtitle">{{ session.location }}</p>
       </header>
 
-      <section v-if="session.address || session.documents.length || session.koofrFolders.length" aria-labelledby="details">
+      <section v-if="session.address || session.documents.length || session.koofrFolders.length || session.dropboxFolders.length"
+               aria-labelledby="details">
         <div class="heading"><h2 id="details">Details</h2></div>
         <dl class="details">
           <div v-if="session.address">
@@ -72,6 +74,10 @@ watch([() => route.params.id, () => auth.authenticated], async ([id, authenticat
           <div v-if="session.koofrFolders.length">
             <dt>Koofr</dt>
             <dd><KoofrFolderList :folders="session.koofrFolders"/></dd>
+          </div>
+          <div v-if="session.dropboxFolders.length">
+            <dt>Dropbox</dt>
+            <dd><DropboxFolderList :folders="session.dropboxFolders"/></dd>
           </div>
         </dl>
       </section>

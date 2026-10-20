@@ -3,10 +3,12 @@ package si.ogrodje.metaos
 import com.dropbox.core.DbxException
 import com.dropbox.core.DbxRequestConfig
 import com.dropbox.core.InvalidAccessTokenException
+import com.dropbox.core.PathRootErrorException
 import com.dropbox.core.http.StandardHttpRequestor
 import com.dropbox.core.oauth.DbxCredential
 import com.dropbox.core.oauth.DbxOAuthException
 import com.dropbox.core.v2.DbxClientV2
+import com.dropbox.core.v2.common.PathRoot
 import com.dropbox.core.v2.files.CreateFolderErrorException
 import com.dropbox.core.v2.files.FileMetadata
 import com.dropbox.core.v2.files.FolderMetadata
@@ -20,6 +22,9 @@ import com.dropbox.core.v2.files.ThumbnailSize
 import com.dropbox.core.v2.files.UploadErrorException
 import com.dropbox.core.v2.files.WriteMode
 import com.dropbox.core.v2.sharing.AccessLevel
+import com.dropbox.core.v2.sharing.CreateSharedLinkWithSettingsErrorException
+import com.dropbox.core.v2.sharing.LinkAudience
+import com.dropbox.core.v2.sharing.SharedLinkSettings
 import io.micrometer.core.instrument.MeterRegistry
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression
@@ -43,7 +48,10 @@ import java.util.concurrent.TimeUnit
  */
 data class DropboxPlace(val id: String, val name: String, val owner: String?, val writable: Boolean, val path: String?)
 
-/** A file or folder in a place, by its path there ("/" is the shared folder itself) */
+/**
+ * A file or folder in a place, by its path there ("/" is the shared folder itself), and by Dropbox's [id] for it
+ * ("id:..."), which stays with it when it's moved or renamed; the shared folder itself has none
+ */
 data class DropboxFile(
     val place: String,
     val path: String,
@@ -52,6 +60,7 @@ data class DropboxFile(
     val size: Long?,
     val modified: OffsetDateTime?,
     val contentType: String?,
+    val id: String? = null,
 )
 
 /** An image, e.g. a thumbnail Dropbox made of a picture */
@@ -65,8 +74,21 @@ interface Dropbox {
     /** A file or folder, or null when there's none at the path */
     fun file(place: String, path: String): DropboxFile?
 
+    /** A file or folder by its ID, wherever it is in the place now; null once it's gone, or not in the place anymore */
+    fun fileById(place: String, id: String): DropboxFile?
+
     /** What's directly in a folder */
     fun list(place: String, folder: String): List<DropboxFile>
+
+    /** Every folder in a place, all the way down: their paths by their IDs */
+    fun folders(place: String): Map<String, String>
+
+    /**
+     * A link to a folder or file, by its ID, that only those with access to it can open, wherever they have it in their
+     * Dropbox: one the bot made before, or a new one. Never one for anyone else; when Dropbox won't make it for members
+     * only, it fails.
+     */
+    fun membersLink(id: String): String
 
     /** Files and folders by name, in one place or in all those in the bot's Dropbox, most relevant first */
     fun search(text: String, place: String?, limit: Int): List<DropboxFile>
@@ -102,12 +124,16 @@ private fun join(folder: String, name: String) = folder.trimEnd('/') + "/" + nam
 
 private fun Metadata.toDropboxFile(place: String, path: String) = when (this) {
     is FileMetadata -> DropboxFile(
-        place, path, name, false, size, serverModified.toInstant().atOffset(ZoneOffset.UTC), URLConnection.guessContentTypeFromName(name)
+        place, path, name, false, size, serverModified.toInstant().atOffset(ZoneOffset.UTC), URLConnection.guessContentTypeFromName(name), id
     )
-    else -> DropboxFile(place, path, name, this is FolderMetadata, null, null, null)
+    is FolderMetadata -> DropboxFile(place, path, name, true, null, null, null, id)
+    else -> DropboxFile(place, path, name, false, null, null, null)
 }
 
 private fun LookupError.notFound() = isNotFound || isNotFolder || isNotFile
+
+// Links that open only for those with access to what they're to
+private val MEMBERS_ONLY = setOf(LinkAudience.NO_ONE, LinkAudience.MEMBERS)
 
 // Dropbox-API-Arg is a header, so its JSON has to be ASCII
 private val headerJson = JsonMapper.builder().enable(JsonWriteFeature.ESCAPE_NON_ASCII).build()
@@ -141,7 +167,12 @@ class DropboxStorage(
     } catch (e: DbxOAuthException) {
         throw rejected(e)
     } catch (e: InvalidAccessTokenException) {
-        throw rejected(e)
+        val missing = e.authError?.takeIf { it.isMissingScope }?.missingScopeValue?.requiredScope ?: throw rejected(e)
+        throw IllegalStateException(
+            "The bot's Dropbox token can't do that without $missing. Tick it on the Dropbox app's Permissions tab, make a " +
+                "new token with dropbox/refresh_token.sh, put it in DROPBOX_REFRESH_TOKEN (.envrc, then k8s/set_secrets.sh) " +
+                "and restart MetaOS", e
+        )
     }
 
     private fun rejected(e: DbxException?) = IllegalStateException(
@@ -176,6 +207,18 @@ class DropboxStorage(
         }
     }
 
+    // With the place as the root, Dropbox tells the path in it
+    override fun fileById(place: String, id: String): DropboxFile? = call {
+        try {
+            val metadata = client.withPathRoot(PathRoot.namespaceId(place)).files().getMetadata(id)
+            metadata.pathDisplay?.takeIf { metadata.parentSharedFolderId == place }?.let { metadata.toDropboxFile(place, it) }
+        } catch (e: GetMetadataErrorException) {
+            if (e.errorValue.isPath && e.errorValue.pathValue.notFound()) null else throw e
+        } catch (_: PathRootErrorException) {
+            null
+        }
+    }
+
     override fun list(place: String, folder: String): List<DropboxFile> = call {
         var result = try {
             client.files().listFolder(at(place, folder))
@@ -189,6 +232,43 @@ class DropboxStorage(
             entries += result.entries
         }
         entries.map { it.toDropboxFile(place, join(folder, it.name)) }
+    }
+
+    // With the place as the root, paths are in it
+    override fun folders(place: String): Map<String, String> = call {
+        val files = client.withPathRoot(PathRoot.namespaceId(place)).files()
+        var result = files.listFolderBuilder("").withRecursive(true).start()
+        val entries = result.entries.toMutableList()
+        while (result.hasMore) {
+            result = files.listFolderContinue(result.cursor)
+            entries += result.entries
+        }
+        entries.filterIsInstance<FolderMetadata>().mapNotNull { folder -> folder.pathDisplay?.let { folder.id to it } }.toMap()
+    }
+
+    // A link for no_one gives no access of its own: those who have it open it with what access they have, wherever they
+    // have the folder. Members, which Dropbox won't make for a new link, is the same. Dropbox keeps a link working when
+    // what it's to is moved or renamed.
+    override fun membersLink(id: String): String = call {
+        val sharing = client.sharing()
+        val made = sharing.listSharedLinksBuilder().withPath(id).withDirectOnly(true).start().links
+        made.firstOrNull { it.linkPermissions.effectiveAudience in MEMBERS_ONLY }?.let { return@call it.url }
+        val link = try {
+            sharing.createSharedLinkWithSettings(id, SharedLinkSettings.newBuilder().withAudience(LinkAudience.NO_ONE).build())
+        } catch (e: CreateSharedLinkWithSettingsErrorException) {
+            val error = e.errorValue
+            when {
+                error.isSettingsError -> throw IllegalStateException("Dropbox won't make the bot a link for members only (${error.settingsErrorValue})", e)
+                error.isSharedLinkAlreadyExists -> throw IllegalStateException("There's a link to it already, and not for members only", e)
+                else -> throw e
+            }
+        }
+        // Should Dropbox have made one for more than members after all, it's taken back
+        if (link.linkPermissions.effectiveAudience !in MEMBERS_ONLY) {
+            sharing.revokeSharedLink(link.url)
+            throw IllegalStateException("Dropbox made a link for ${link.linkPermissions.effectiveAudience} rather than members only; MetaOS took it back")
+        }
+        link.url
     }
 
     // Search finds files by where they are in the bot's Dropbox, so what it finds is mapped back to the shared folders

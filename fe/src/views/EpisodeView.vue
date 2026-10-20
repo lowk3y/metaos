@@ -3,14 +3,16 @@ import { ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
 import DocLinks from '@/components/DocLinks.vue'
+import DropboxFolderList from '@/components/DropboxFolderList.vue'
 import HistoryTimeline from '@/components/HistoryTimeline.vue'
 import KoofrFolderList from '@/components/KoofrFolderList.vue'
 import MarkdownText from '@/components/MarkdownText.vue'
 import PhotoStrip from '@/components/PhotoStrip.vue'
+import ShowBadge from '@/components/ShowBadge.vue'
 import SignInPrompt from '@/components/SignInPrompt.vue'
 import { brands } from '@/brands'
 import {
-  EPISODE_FIELDS, type EpisodeDetails, formatDate, HISTORY_FIELDS, KOOFR_FIELDS, links, photosOf, roleName,
+  DROPBOX_FIELDS, EPISODE_FIELDS, type EpisodeDetails, formatDate, HISTORY_FIELDS, KOOFR_FIELDS, links, photosOf, roleName,
   sessionPath, sessionTitle, statusName,
 } from '@/episodes'
 import { errorMessage, graphql } from '@/graphql'
@@ -34,7 +36,7 @@ watch([() => route.params.ref, () => auth.authenticated], async ([episodeRef, au
   if (!authenticated) return
   try {
     const data = await graphql<{ episode: EpisodeDetails | null }>(`query ($ref: String!) {
-      episode(ref: $ref) { ${EPISODE_FIELDS} show summary machineSummary addedDate ${KOOFR_FIELDS} ${HISTORY_FIELDS} }
+      episode(ref: $ref) { ${EPISODE_FIELDS} titleB titleC summary machineSummary addedDate ${KOOFR_FIELDS} ${DROPBOX_FIELDS} ${HISTORY_FIELDS} }
     }`, { ref: String(episodeRef) })
     if (load === loads) episode.value = data.episode
   } catch (e) {
@@ -57,15 +59,24 @@ watch([() => route.params.ref, () => auth.authenticated], async ([episodeRef, au
       <header class="title">
         <p class="kicker">
           <span v-if="episode.code" class="code">{{ episode.code }}</span>
+          <ShowBadge v-if="episode.show" :name="episode.show" :color="episode.showColor"/>
           <span class="status">{{ statusName(episode.status) }}</span>
         </p>
         <h1 lang="sl">{{ episode.title }}</h1>
-        <p v-if="episode.show" class="subtitle">{{ episode.show }}</p>
       </header>
 
       <section aria-labelledby="details">
         <div class="heading"><h2 id="details">Details</h2></div>
         <dl class="details">
+          <div v-if="episode.titleB || episode.titleC">
+            <dt>Alternative titles</dt>
+            <dd>
+              <ul class="alternatives" lang="sl">
+                <li v-if="episode.titleB"><span class="variant">B</span>{{ episode.titleB }}</li>
+                <li v-if="episode.titleC"><span class="variant">C</span>{{ episode.titleC }}</li>
+              </ul>
+            </dd>
+          </div>
           <div v-if="episode.session">
             <dt>Session</dt>
             <dd><RouterLink :to="sessionPath(episode.session)">{{ sessionTitle(episode.session) }}</RouterLink></dd>
@@ -98,6 +109,10 @@ watch([() => route.params.ref, () => auth.authenticated], async ([episodeRef, au
           <div v-if="episode.koofrFolders.length">
             <dt>Koofr</dt>
             <dd><KoofrFolderList :folders="episode.koofrFolders"/></dd>
+          </div>
+          <div v-if="episode.dropboxFolders.length">
+            <dt>Dropbox</dt>
+            <dd><DropboxFolderList :folders="episode.dropboxFolders"/></dd>
           </div>
         </dl>
       </section>
@@ -143,4 +158,26 @@ watch([() => route.params.ref, () => auth.authenticated], async ([episodeRef, au
 
 <style scoped lang="scss">
 @use '../assets/page';
+
+// Each after its letter in the A/B test; a long one wraps beside it
+.alternatives {
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr);
+    align-items: baseline;
+  }
+
+  li + li {
+    margin-top: 4px;
+  }
+}
+
+.variant {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--muted);
+}
 </style>

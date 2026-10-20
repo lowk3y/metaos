@@ -2,6 +2,8 @@
 import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import DocLinks from '@/components/DocLinks.vue'
+import DropboxLinks from '@/components/DropboxLinks.vue'
+import KoofrLinks from '@/components/KoofrLinks.vue'
 import EpisodeItem from '@/components/EpisodeItem.vue'
 import SignInPrompt from '@/components/SignInPrompt.vue'
 import { bySession, type Episode, EPISODE_FIELDS, formatDate, sessionPath, type SessionGroup } from '@/episodes'
@@ -110,6 +112,8 @@ watch(() => auth.authenticated, (authenticated) => {
               <span v-if="group.session.location" class="location">{{ group.session.location }}</span>
             </RouterLink>
             <DocLinks :documents="group.session.documents"/>
+            <KoofrLinks :folders="group.session.koofrFolders"/>
+            <DropboxLinks :folders="group.session.dropboxFolders"/>
           </h3>
           <ul class="episodes">
             <EpisodeItem v-for="episode in group.episodes" :key="episode.id" :episode="episode"/>

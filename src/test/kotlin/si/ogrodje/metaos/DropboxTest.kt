@@ -14,10 +14,11 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** Dropbox in memory: places, folders and files with their content */
+/** Dropbox in memory: places, folders and files with their content, and IDs that stay with them through moves */
 class FakeDropbox : Dropbox {
     val shared = mutableListOf<DropboxPlace>()
     private val files = mutableMapOf<Pair<String, String>, Pair<DropboxFile, ByteArray?>>()
+    private var ids = 0
 
     fun place(id: String, name: String, writable: Boolean = true) =
         DropboxPlace(id, name, "Ogrodje", writable, "/$name").also { shared += it; put(id, "/", null) }
@@ -25,11 +26,23 @@ class FakeDropbox : Dropbox {
     fun put(place: String, path: String, content: ByteArray?) {
         val name = if (path == "/") shared.first { it.id == place }.name else path.substringAfterLast('/')
         val contentType = content?.let { URLConnection.guessContentTypeFromName(name) }
-        files[place to path] = DropboxFile(place, path, name, content == null, content?.size?.toLong(), null, contentType) to content
+        val id = if (path == "/") null else files[place to path]?.first?.id ?: "id:${++ids}"
+        files[place to path] = DropboxFile(place, path, name, content == null, content?.size?.toLong(), null, contentType, id) to content
     }
 
     override fun places() = shared.toList()
     override fun file(place: String, path: String) = files[place to path]?.first
+    override fun fileById(place: String, id: String) = files.values.map { it.first }.firstOrNull { it.place == place && it.id == id }
+    override fun folders(place: String) =
+        files.values.map { it.first }.filter { it.place == place && it.folder && it.id != null }.associate { it.id!! to it.path }
+
+    /** Whether Dropbox makes links for members only, as a Basic account may not */
+    var membersLinks = true
+
+    override fun membersLink(id: String): String {
+        check(membersLinks) { "Dropbox won't make the bot a link for members only" }
+        return "https://www.dropbox.com/scl/fo/${id.removePrefix("id:")}/members"
+    }
     override fun list(place: String, folder: String) =
         files.values.map { it.first }.filter { it.place == place && it.path != "/" && it.path.substringBeforeLast('/').ifEmpty { "/" } == folder }
 
@@ -148,6 +161,8 @@ class DropboxTest {
             assertNotNull(storage.file(place.id, "/"))
             val files = storage.list(place.id, "/")
             files.firstOrNull()?.let { assertEquals(it, storage.file(place.id, it.path)?.copy(modified = it.modified)) }
+            files.firstOrNull { it.id != null }?.let { assertEquals(it.path, storage.fileById(place.id, it.id!!)?.path) }
+            files.firstOrNull { it.folder }?.let { assertEquals(it.path, storage.folders(place.id)[it.id]) }
             files.firstOrNull { !it.folder }?.let { assertTrue(storage.read(place.id, it.path, 16).size <= 16) }
             if (place.path != null) files.firstOrNull()?.let { file ->
                 assertTrue(storage.search(file.name, place.id, 5).all { it.place == place.id })

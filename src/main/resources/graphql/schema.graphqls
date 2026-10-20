@@ -35,8 +35,14 @@ type Episode {
     "e.g. S05E08"
     code: String
     title: String!
+    "An alternative title, which the title is A/B tested against. Null without a signed-in user."
+    titleB: String
+    "Another alternative title, as titleB"
+    titleC: String
     "The show it's part of"
     show: String
+    "Its show's colour, as hex RGB, e.g. #0404a4"
+    showColor: String
     status: EpisodeStatus!
     "The recording session it's part of"
     session: Session
@@ -60,6 +66,8 @@ type Episode {
     machineSummary: String
     "Koofr folders about the episode, e.g. its recordings. None without a signed-in user."
     koofrFolders: [KoofrFolder!]!
+    "Dropbox folders about the episode, e.g. its artwork, by path. None without a signed-in user."
+    dropboxFolders: [DropboxFolder!]!
     "Every change to the episode and to what's linked to it, oldest first. None without a signed-in user."
     history: [Change!]!
 }
@@ -76,6 +84,24 @@ type KoofrFolder {
     None without a signed-in user, or when Koofr doesn't answer.
     """
     photos(limit: Int! = 4): [KoofrPhoto!]!
+}
+
+"""
+A folder in Dropbox, in a place (a folder shared with Ogrodje's bot): where it is now, as it's linked by its Dropbox ID,
+which stays with it when it's moved or renamed; where it was linked when Dropbox doesn't answer
+"""
+type DropboxFolder {
+    place: String!
+    "Named when Dropbox answers"
+    placeName: String
+    path: String!
+    "Gone from its place: deleted, or moved out of it"
+    missing: Boolean!
+    """
+    A link to the folder that only those with access to it can open, wherever they have it in their Dropbox; or, while
+    there's none, its path in Dropbox's web app, for those who have the place where the bot has it
+    """
+    url: String!
 }
 
 "A photo in a Koofr folder"
@@ -131,6 +157,8 @@ type Session {
     episodes: [Episode!]!
     "Koofr folders about the session, e.g. everything recorded that day. None without a signed-in user."
     koofrFolders: [KoofrFolder!]!
+    "Dropbox folders about the session, by path. None without a signed-in user."
+    dropboxFolders: [DropboxFolder!]!
     "Every change to the session, to what's linked to it and to which episodes are in it, oldest first. None without a signed-in user."
     history: [Change!]!
 }

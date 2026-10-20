@@ -157,7 +157,8 @@ replaces anything unasked.
   <place>?path=...`; a shared place has the same ID for everyone it's shared with), and shows its first photos:
   those right in it, then those in the folders right in it ([`KoofrPhotos.kt`](src/main/kotlin/si/ogrodje/metaos/KoofrPhotos.kt)).
   Koofr makes the thumbnails; MetaOS passes them on at `/koofr/thumbnail`, behind `metaos:read` and only for those
-  photos, so the page fetches them with its token.
+  photos, so the page fetches them with its token. In lists, Koofr's logo links to an episode's or session's folders,
+  as the doc icon does to its Google Docs; the API batches the folders, and asks Koofr only for place names and photos.
 - The `koofr` health check uses it every hour and reports a rejected password there, in `metaos_koofr_connected` and in
   the log. `KoofrTest` runs against the real account (read-only) when the app password is in the environment.
 
@@ -176,6 +177,19 @@ folders and moves or renames, but never deletes or replaces anything unasked.
 - A place is a shared folder, by its ID, which is also its namespace's (`ns:<id>/path`): that finds it wherever the bot
   has it in its Dropbox. Search only sees the folders that are in the bot's Dropbox ("Add to Dropbox"), and finds them
   by where they are there.
+- `DropboxFoldersMCP` links folders to episodes and recording sessions (`episode_dropbox_folders`,
+  `session_dropbox_folders`), like Koofr's, but by Dropbox's ID for the folder: wherever it's moved or renamed in its
+  place, also in the Dropbox app, it stays linked, and is listed where it is now (by ID, with the place as the path
+  root). Only one deleted or moved out of its place is missing.
+- Linking a folder also makes a Dropbox link to it that only those with access to it can open (`sharing.write`), kept
+  with the link: Dropbox's web paths (`dropbox.com/home/...`) are in each viewer's own Dropbox, e.g. the owner has
+  Artwork at `/Ogrodje/Artwork` and Iva at `/artwork`. It's a link for `no_one` (Dropbox's "only people invited"),
+  which gives no access of its own; the bot's Basic account can make only those or public ones, and Dropbox refuses
+  `members` for a new link. MetaOS never makes one for anyone else, and takes it back should Dropbox make it anyway;
+  while Dropbox won't make one, the folder is linked without it (`urlError` says why), and linking it again makes it.
+- On the front-end, a linked folder shows like a Koofr one: Dropbox's logo in lists, and in the episode's and session's
+  details, opening its link for members, or else its path in Dropbox's web app as the bot has it. Lists ask Dropbox
+  where the folders are once per place and minute (`DropboxFolderIndex`), not per folder.
 - The `dropbox` health check uses it every hour and reports a rejected token there, in `metaos_dropbox_connected` and in
   the log. `DropboxTest` runs against the real account (read-only) when the refresh token is in the environment.
 

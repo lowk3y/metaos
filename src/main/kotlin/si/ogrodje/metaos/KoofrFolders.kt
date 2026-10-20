@@ -68,6 +68,10 @@ private const val MOVED = """
 
 interface EpisodeKoofrFoldersRepository : JpaRepository<EpisodeKoofrFolder, UUID> {
     fun findByEpisode(episode: Episode): List<EpisodeKoofrFolder>
+
+    @Query("select * from episode_koofr_folders where episode_id in :episodeIds order by path, place", nativeQuery = true)
+    fun findByEpisodeIds(episodeIds: Collection<UUID>): List<EpisodeKoofrFolder>
+
     fun findByEpisodeAndPlaceAndPath(episode: Episode, place: String, path: String): EpisodeKoofrFolder?
     fun existsByPlaceAndPath(place: String, path: String): Boolean
 
@@ -78,6 +82,10 @@ interface EpisodeKoofrFoldersRepository : JpaRepository<EpisodeKoofrFolder, UUID
 
 interface SessionKoofrFoldersRepository : JpaRepository<SessionKoofrFolder, UUID> {
     fun findBySession(session: Session): List<SessionKoofrFolder>
+
+    @Query("select * from session_koofr_folders where session_id in :sessionIds order by path, place", nativeQuery = true)
+    fun findBySessionIds(sessionIds: Collection<UUID>): List<SessionKoofrFolder>
+
     fun findBySessionAndPlaceAndPath(session: Session, place: String, path: String): SessionKoofrFolder?
     fun existsByPlaceAndPath(place: String, path: String): Boolean
 
