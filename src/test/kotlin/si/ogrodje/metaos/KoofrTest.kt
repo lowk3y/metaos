@@ -33,6 +33,10 @@ class FakeKoofr : Koofr {
     override fun read(place: String, path: String, maxBytes: Int) =
         files.getValue(place to path).second!!.let { it.copyOf(minOf(it.size, maxBytes)) }
 
+    // The image itself stands in for its thumbnail
+    override fun thumbnail(place: String, path: String, size: String) =
+        files.getValue(place to path).let { (file, content) -> KoofrImage(file.contentType ?: "image/jpeg", content!!) }
+
     override fun upload(place: String, folder: String, name: String, contentType: String, content: ByteArray, overwrite: Boolean): KoofrFile {
         val path = "${folder.trimEnd('/')}/$name"
         require(overwrite || file(place, path) == null) { "$path is already there" }

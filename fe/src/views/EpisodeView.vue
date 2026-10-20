@@ -5,11 +5,13 @@ import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
 import DocLinks from '@/components/DocLinks.vue'
 import HistoryTimeline from '@/components/HistoryTimeline.vue'
 import KoofrFolderList from '@/components/KoofrFolderList.vue'
+import MarkdownText from '@/components/MarkdownText.vue'
+import PhotoStrip from '@/components/PhotoStrip.vue'
 import SignInPrompt from '@/components/SignInPrompt.vue'
 import { brands } from '@/brands'
 import {
-  EPISODE_FIELDS, type EpisodeDetails, formatDate, HISTORY_FIELDS, KOOFR_FIELDS, links, roleName, sessionPath,
-  sessionTitle, statusName,
+  EPISODE_FIELDS, type EpisodeDetails, formatDate, HISTORY_FIELDS, KOOFR_FIELDS, links, photosOf, roleName,
+  sessionPath, sessionTitle, statusName,
 } from '@/episodes'
 import { errorMessage, graphql } from '@/graphql'
 import { useAuthStore } from '@/stores/auth'
@@ -100,6 +102,11 @@ watch([() => route.params.ref, () => auth.authenticated], async ([episodeRef, au
         </dl>
       </section>
 
+      <section v-if="photosOf(episode.koofrFolders).length" aria-labelledby="photos">
+        <div class="heading"><h2 id="photos">Photos</h2></div>
+        <PhotoStrip :photos="photosOf(episode.koofrFolders)" :folder="episode.koofrFolders[0]?.url"/>
+      </section>
+
       <section v-if="episode.people.length" aria-labelledby="people">
         <div class="heading">
           <h2 id="people">People</h2>
@@ -115,12 +122,12 @@ watch([() => route.params.ref, () => auth.authenticated], async ([episodeRef, au
 
       <section v-if="episode.summary" aria-labelledby="summary">
         <div class="heading"><h2 id="summary">Summary</h2></div>
-        <p class="text" lang="sl">{{ episode.summary }}</p>
+        <MarkdownText :source="episode.summary" lang="sl"/>
       </section>
 
       <section v-if="episode.machineSummary" aria-labelledby="ai-summary">
         <div class="heading"><h2 id="ai-summary">AI summary</h2></div>
-        <p class="text" lang="sl">{{ episode.machineSummary }}</p>
+        <MarkdownText :source="episode.machineSummary" lang="sl"/>
       </section>
 
       <section aria-labelledby="history">

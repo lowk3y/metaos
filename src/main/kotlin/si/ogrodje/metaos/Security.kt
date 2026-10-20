@@ -52,6 +52,8 @@ class SecurityConfig {
             it.requestMatchers("/mcp/**").hasAuthority("SCOPE_$MCP_SCOPE")
             // Anyone may ask for what's public, e.g. the released episodes; the rest needs a token (GraphQL.kt)
             it.requestMatchers("/graphql").permitAll()
+            // Thumbnails of the photos in episodes' and sessions' Koofr folders (KoofrPhotos.kt)
+            it.requestMatchers("/koofr/**").hasAuthority("SCOPE_$API_READ_SCOPE")
             // The front-end (Frontend.kt): its files and pages are public - its data comes from the API, with a token
             it.requestMatchers(HttpMethod.GET, "/assets/**", "/favicon.png", "/silent-check-sso.html", "/config.json")
                 .permitAll()

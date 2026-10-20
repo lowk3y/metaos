@@ -37,6 +37,7 @@ watch(() => auth.authenticated, async (authenticated) => {
 
         <div class="pages">
           <RouterLink to="/">Home</RouterLink>
+          <RouterLink to="/episodes">Episodes</RouterLink>
           <RouterLink to="/usage">Usage</RouterLink>
         </div>
       </nav>

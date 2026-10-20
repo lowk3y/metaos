@@ -25,6 +25,8 @@ export default defineConfig({
     proxy: {
       '/graphql': metaos,
       '/config.json': metaos,
+      // Thumbnails of the photos in Koofr folders (KoofrPhotos.kt)
+      '/koofr': metaos,
     },
   },
 })

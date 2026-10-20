@@ -49,11 +49,21 @@ export interface Episode {
   documents: GoogleDoc[]
 }
 
-/** A Koofr folder shared with Ogrodje's bot: a place, by name when Koofr answers, and a path in it */
+/** A photo in a Koofr folder: its thumbnail, from MetaOS with the sign-in token, and its folder in Koofr */
+export interface KoofrPhoto {
+  name: string
+  path: string
+  thumbnail: string
+  url: string
+}
+
+/** A Koofr folder shared with Ogrodje's bot: a place, by name when Koofr answers, a path in it, and where it opens */
 export interface KoofrFolder {
   place: string
   placeName: string | null
   path: string
+  url: string
+  photos: KoofrPhoto[]
 }
 
 /** One field of a change; from and to are null when there's nothing short to show, e.g. a summary */
@@ -91,7 +101,15 @@ export interface SessionDetails extends Session {
   history: Change[]
 }
 
-export const KOOFR_FIELDS = 'koofrFolders { place placeName path }'
+// Seven photos and a way to the rest fill two rows of four
+export const PHOTOS = 7
+
+export const KOOFR_FIELDS = `koofrFolders { place placeName path url photos(limit: ${PHOTOS}) { name path thumbnail url } }`
+
+/** The first few photos of an episode's or session's Koofr folders */
+export function photosOf(folders: KoofrFolder[], limit = PHOTOS) {
+  return folders.flatMap((folder) => folder.photos).slice(0, limit)
+}
 export const HISTORY_FIELDS = 'history { at actor client tool summary fields { field from to } }'
 
 /** An episode's page: at its code, or at its ID while it has none */

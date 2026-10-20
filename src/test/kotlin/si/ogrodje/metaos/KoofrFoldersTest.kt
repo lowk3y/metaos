@@ -3,6 +3,11 @@ package si.ogrodje.metaos
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
+import org.springframework.http.HttpHeaders
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt
+import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.get
 import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
@@ -13,6 +18,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 @SpringBootTest(properties = ["metaos.koofr.email=bot@example.com", "metaos.koofr.app-password=test"])
+@AutoConfigureMockMvc
 @Import(TestcontainersConfig::class, KoofrFoldersTest.Config::class)
 class KoofrFoldersTest @Autowired constructor(
     private val koofr: FakeKoofr,
@@ -21,7 +27,64 @@ class KoofrFoldersTest @Autowired constructor(
     private val koofrMCP: KoofrMCP,
     private val foldersMCP: KoofrFoldersMCP,
     private val auditMCP: AuditMCP,
+    private val photos: KoofrPhotos,
+    private val mvc: MockMvc,
 ) {
+
+    @Test
+    fun `lists an episode folder's photos, then those in its folders, and makes thumbnails only of those`() {
+        episodesRepository.saveAndFlush(Episode(title = "Photos", code = "S09E30"))
+        koofr.put("mount-media", "/Foto", null)
+        koofr.put("mount-media", "/Foto/S09E30", null)
+        koofr.put("mount-media", "/Foto/S09E30/notes.md", "# Zapiski".toByteArray(), "text/markdown")
+        koofr.put("mount-media", "/Foto/S09E30/cover.jpg", ByteArray(4), "image/jpeg")
+        koofr.put("mount-media", "/Foto/S09E30/B shoot", null)
+        listOf("3.jpg", "1.jpg", "2.png", "4.jpg").forEach { koofr.put("mount-media", "/Foto/S09E30/B shoot/$it", ByteArray(4), "image/jpeg") }
+        koofr.put("mount-media", "/Foto/S09E30/B shoot/deeper", null)
+        koofr.put("mount-media", "/Foto/S09E30/A empty", null)
+        koofr.put("mount-media", "/Foto/elsewhere.jpg", ByteArray(4), "image/jpeg")
+        foldersMCP.linkEpisode("S09E30", "mount-media", "/Foto/S09E30")
+
+        // The folder's own first, then its folders' by name; no further than needed
+        assertEquals(
+            listOf("cover.jpg", "1.jpg", "2.png", "3.jpg"),
+            photos.of("mount-media", "/Foto/S09E30", limit = 4).map { it.name },
+        )
+        assertEquals(listOf("cover.jpg"), photos.of("mount-media", "/Foto/S09E30", limit = 1).map { it.name })
+
+        assertEquals("image/jpeg", photos.thumbnail("mount-media", "/Foto/S09E30/B shoot/1.jpg").contentType)
+        assertEquals(4, photos.thumbnail("mount-media", "/Foto/S09E30/cover.jpg").bytes.size)
+        // Not a photo, not in a linked folder or right in one, or a way out of it
+        assertFailsWith<IllegalArgumentException> { photos.thumbnail("mount-media", "/Foto/S09E30/notes.md") }
+        assertFailsWith<IllegalArgumentException> { photos.thumbnail("mount-media", "/Foto/elsewhere.jpg") }
+        assertFailsWith<IllegalArgumentException> { photos.thumbnail("mount-media", "/Foto/S09E30/../elsewhere.jpg") }
+        assertFailsWith<IllegalArgumentException> { photos.thumbnail("mount-archive", "/Foto/S09E30/cover.jpg") }
+    }
+
+    @Test
+    fun `serves thumbnails only to signed-in users, and only of the linked folders' photos`() {
+        episodesRepository.saveAndFlush(Episode(title = "Thumbnails", code = "S09E31"))
+        koofr.put("mount-media", "/Thumbs", null)
+        koofr.put("mount-media", "/Thumbs/cover.jpg", byteArrayOf(1, 2, 3), "image/jpeg")
+        koofr.put("mount-media", "/Thumbs.jpg", byteArrayOf(4), "image/jpeg")
+        foldersMCP.linkEpisode("S09E31", "mount-media", "/Thumbs")
+        fun thumbnail(path: String) = mvc.get("/koofr/thumbnail") { param("place", "mount-media"); param("path", path) }
+
+        thumbnail("/Thumbs/cover.jpg").andExpect { status { isUnauthorized() } }
+        mvc.get("/koofr/thumbnail") {
+            param("place", "mount-media"); param("path", "/Thumbs/cover.jpg")
+            with(jwt().jwt { it.claim("scope", MCP_SCOPE) })
+        }.andExpect { status { isForbidden() } }
+
+        val reader = jwt().jwt { it.claim("scope", API_READ_SCOPE) }
+        mvc.get("/koofr/thumbnail") { param("place", "mount-media"); param("path", "/Thumbs/cover.jpg"); with(reader) }.andExpect {
+            status { isOk() }
+            content { contentType("image/jpeg"); bytes(byteArrayOf(1, 2, 3)) }
+            header { string(HttpHeaders.CACHE_CONTROL, "max-age=86400, private") }
+        }
+        mvc.get("/koofr/thumbnail") { param("place", "mount-media"); param("path", "/Thumbs.jpg"); with(reader) }
+            .andExpect { status { isNotFound() } }
+    }
 
     @TestConfiguration
     class Config {

@@ -69,6 +69,7 @@ private const val MOVED = """
 interface EpisodeKoofrFoldersRepository : JpaRepository<EpisodeKoofrFolder, UUID> {
     fun findByEpisode(episode: Episode): List<EpisodeKoofrFolder>
     fun findByEpisodeAndPlaceAndPath(episode: Episode, place: String, path: String): EpisodeKoofrFolder?
+    fun existsByPlaceAndPath(place: String, path: String): Boolean
 
     @Modifying(clearAutomatically = true)
     @Query("update episode_koofr_folders $MOVED", nativeQuery = true)
@@ -78,6 +79,7 @@ interface EpisodeKoofrFoldersRepository : JpaRepository<EpisodeKoofrFolder, UUID
 interface SessionKoofrFoldersRepository : JpaRepository<SessionKoofrFolder, UUID> {
     fun findBySession(session: Session): List<SessionKoofrFolder>
     fun findBySessionAndPlaceAndPath(session: Session, place: String, path: String): SessionKoofrFolder?
+    fun existsByPlaceAndPath(place: String, path: String): Boolean
 
     @Modifying(clearAutomatically = true)
     @Query("update session_koofr_folders $MOVED", nativeQuery = true)

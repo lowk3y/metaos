@@ -33,6 +33,9 @@ data class KoofrFile(
     val contentType: String?,
 )
 
+/** An image, e.g. a thumbnail Koofr made of a photo */
+class KoofrImage(val contentType: String, val bytes: ByteArray)
+
 /** Koofr, as Ogrodje's bot account sees it. Places are Koofr mounts; paths are in a place. */
 interface Koofr {
     /** The folders shared with the bot */
@@ -49,6 +52,12 @@ interface Koofr {
 
     /** The start of a file, at most [maxBytes] */
     fun read(place: String, path: String, maxBytes: Int): ByteArray
+
+    /**
+     * A thumbnail Koofr makes of an image, as wide as its [size] says: small (64 px), shmedium (128), medium (384),
+     * large (512) or huge
+     */
+    fun thumbnail(place: String, path: String, size: String): KoofrImage
 
     /** A new file in a folder; one of the same name is only replaced when [overwrite] is set, and Koofr keeps it as a version */
     fun upload(place: String, folder: String, name: String, contentType: String, content: ByteArray, overwrite: Boolean): KoofrFile
@@ -143,6 +152,15 @@ class KoofrStorage(
 
     override fun read(place: String, path: String, maxBytes: Int): ByteArray = call {
         files(place).download(path, null).downloadStream.use { it.readNBytes(maxBytes) }
+    }
+
+    override fun thumbnail(place: String, path: String, size: String): KoofrImage = call {
+        val download = files(place).download(path, Files.DownloadOptions().apply { thumbnailSize = size })
+        try {
+            KoofrImage(download.contentType ?: "image/jpeg", download.downloadStream.readAllBytes())
+        } finally {
+            download.close()
+        }
     }
 
     override fun upload(place: String, folder: String, name: String, contentType: String, content: ByteArray, overwrite: Boolean): KoofrFile {

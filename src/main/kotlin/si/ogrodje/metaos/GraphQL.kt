@@ -16,6 +16,7 @@ import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.stereotype.Component
 import org.springframework.stereotype.Controller
+import java.net.URLEncoder
 import java.time.LocalDate
 import java.util.UUID
 
@@ -25,6 +26,7 @@ import java.util.UUID
  */
 
 const val MAX_RELEASED_EPISODES = 20
+const val MAX_PHOTOS = 12
 
 private const val SIGNED_IN = "hasAuthority('SCOPE_$API_READ_SCOPE')"
 
@@ -55,6 +57,11 @@ class EpisodesGraphQL(private val episodes: EpisodesRepository, private val epis
         episodes.findByStatusIn(
             listOf(EpisodeStatus.RECORDED, EpisodeStatus.IN_PRODUCTION, EpisodeStatus.READY, EpisodeStatus.EARLY_ACCESS)
         ).sortedWith(byRecordingDate)
+
+    // What's released is public; the rest is for signed-in users
+    @QueryMapping("episodes")
+    fun allEpisodes(): List<Episode> =
+        if (signedIn()) episodes.findLatestFirst() else episodes.findLatestFirstByStatus(EpisodeStatus.PUBLISHED)
 
     @SchemaMapping(typeName = "Episode")
     fun show(episode: Episode): String? = episode.show?.name
@@ -96,8 +103,22 @@ class DocumentsGraphQL(
     }
 }
 
+// A query parameter as Koofr's web app and MetaOS read it: spaces as %20, as a + stays a +
+private fun queryValue(value: String) = URLEncoder.encode(value, Charsets.UTF_8).replace("+", "%20")
+
+// A folder in Koofr's web app, where a shared place has the same ID for all its users
+private fun koofrUrl(place: String, path: String) = "https://app.koofr.net/app/storage/$place?path=${queryValue(path)}"
+
 /** A Koofr folder linked to an episode or session: a place shared with the bot, named when Koofr answers, and a path */
-data class KoofrFolderLinkDto(val place: String, val placeName: String?, val path: String)
+data class KoofrFolderLinkDto(val place: String, val placeName: String?, val path: String) {
+    val url = koofrUrl(place, path)
+}
+
+/** A photo in a linked Koofr folder: its thumbnail from MetaOS (KoofrPhotos), and the folder it's in, in Koofr */
+data class KoofrPhotoDto(val place: String, val path: String, val name: String) {
+    val thumbnail = "/koofr/thumbnail?place=${queryValue(place)}&path=${queryValue(path)}"
+    val url = koofrUrl(place, path.substringBeforeLast('/').ifEmpty { "/" })
+}
 
 // Everything about one episode or session, for its page. What isn't public is empty, or null, for anyone else, as an
 // episode or session can also be reached through the released episodes.
@@ -109,6 +130,7 @@ class DetailsGraphQL(
     private val sessionFolders: SessionKoofrFoldersRepository,
     private val history: History,
     private val koofr: ObjectProvider<Koofr>,
+    private val photos: ObjectProvider<KoofrPhotos>,
 ) {
 
     @QueryMapping
@@ -145,6 +167,15 @@ class DetailsGraphQL(
     @SchemaMapping(typeName = "Session", field = "history")
     fun sessionHistory(session: Session): List<HistoryEntryDto> =
         if (signedIn()) history.of(checkNotNull(session.id)) else emptyList()
+
+    // None when Koofr is off or doesn't answer: a page doesn't fail for want of photos
+    @SchemaMapping(typeName = "KoofrFolder", field = "photos")
+    fun photos(folder: KoofrFolderLinkDto, @Argument limit: Int): List<KoofrPhotoDto> {
+        require(limit in 1..MAX_PHOTOS) { "limit must be between 1 and $MAX_PHOTOS" }
+        val photos = photos.ifAvailable?.takeIf { signedIn() } ?: return emptyList()
+        return runCatching { photos.of(folder.place, folder.path, limit) }.getOrDefault(emptyList())
+            .map { KoofrPhotoDto(it.place, it.path, it.name) }
+    }
 
     // Places by name when Koofr is on and answers; a page doesn't fail for want of a name
     private fun folders(links: List<Pair<String, String>>): List<KoofrFolderLinkDto> {

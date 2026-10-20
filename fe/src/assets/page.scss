@@ -124,13 +124,6 @@
   }
 }
 
-// Text as it was written, e.g. a summary in Markdown
-.text {
-  max-width: 680px;
-  white-space: pre-line;
-  color: var(--secondary);
-}
-
 @media (max-width: 640px) {
   .details > div {
     grid-template-columns: minmax(0, 1fr);

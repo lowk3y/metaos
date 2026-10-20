@@ -153,6 +153,11 @@ replaces anything unasked.
 - `KoofrFoldersMCP` links folders to episodes and recording sessions (`episode_koofr_folders`,
   `session_koofr_folders`). Koofr has no file IDs, so a link is a place (mount ID) and a path: moves through
   `move_koofr_file` take the links along, while a folder moved in the Koofr app leaves its links listed as missing.
+- On the front-end's episode and session pages, a linked folder links to Koofr's web app (`app.koofr.net/app/storage/
+  <place>?path=...`; a shared place has the same ID for everyone it's shared with), and shows its first photos:
+  those right in it, then those in the folders right in it ([`KoofrPhotos.kt`](src/main/kotlin/si/ogrodje/metaos/KoofrPhotos.kt)).
+  Koofr makes the thumbnails; MetaOS passes them on at `/koofr/thumbnail`, behind `metaos:read` and only for those
+  photos, so the page fetches them with its token.
 - The `koofr` health check uses it every hour and reports a rejected password there, in `metaos_koofr_connected` and in
   the log. `KoofrTest` runs against the real account (read-only) when the app password is in the environment.
 

@@ -3,6 +3,12 @@ package si.ogrodje.metaos
 import com.jayway.jsonpath.JsonPath
 import org.hamcrest.Matchers.contains
 import org.hamcrest.Matchers.empty
+import org.hamcrest.Matchers.equalTo
+import org.hamcrest.Matchers.everyItem
+import org.hamcrest.Matchers.hasItem
+import org.hamcrest.Matchers.hasItems
+import org.hamcrest.Matchers.not
+import org.hamcrest.Matchers.nullValue
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.springframework.security.core.context.SecurityContextHolder
@@ -37,6 +43,7 @@ class GraphQLTest @Autowired constructor(
     private val sessions: SessionsRepository,
     private val episodeDocuments: EpisodeDocumentsRepository,
     private val sessionDocuments: SessionDocumentsRepository,
+    private val episodeFolders: EpisodeKoofrFoldersRepository,
     private val episodesMCP: EpisodesMCP,
     private val sessionsMCP: SessionsMCP,
     private val peopleMCP: PeopleMCP,
@@ -63,17 +70,22 @@ class GraphQLTest @Autowired constructor(
             episodesMCP.update(code = "gq-h1", newCode = null, title = "Final title", summary = "About it", machineSummary = "AI on it")
             episodesMCP.assignPerson("gq-h1", checkNotNull(peopleMCP.create(name = "History Host", email = null).id), Role.HOST)
         }
+        episodeFolders.save(EpisodeKoofrFolder(checkNotNull(episodes.findByCode("gq-h1")), "place-1", "/Epizode/S05E04 - Jure in Jošt (SAP)"))
 
         graphql(
-            """{ episode(ref: "gq-h1") { title summary machineSummary addedDate
+            """{ episode(ref: "gq-h1") { title summary machineSummary addedDate koofrFolders { path url }
                  history { actor tool summary fields { field from to } } } }""",
             reader,
         )
             .andExpect(jsonPath("$.errors").doesNotExist())
+            .andExpect(jsonPath("$.data.episode.koofrFolders[0].url").value(
+                "https://app.koofr.net/app/storage/place-1?path=%2FEpizode%2FS05E04%20-%20Jure%20in%20Jo%C5%A1t%20%28SAP%29"))
             .andExpect(jsonPath("$.data.episode.title").value("Final title"))
             .andExpect(jsonPath("$.data.episode.machineSummary").value("AI on it"))
-            .andExpect(jsonPath("$.data.episode.history[*].summary",
-                contains("Created the episode", "Changed the episode", "Added History Host as host")))
+            .andExpect(jsonPath("$.data.episode.history[*].summary", contains(
+                "Created the episode", "Changed the episode", "Added History Host as host",
+                "Linked the Koofr folder /Epizode/S05E04 - Jure in Jošt (SAP)",
+            )))
             .andExpect(jsonPath("$.data.episode.history[0].actor").value("ana"))
             .andExpect(jsonPath("$.data.episode.history[0].tool").value("create_episode"))
             .andExpect(jsonPath("$.data.episode.history[1].fields[*].field", contains("Title", "Summary", "AI summary")))
@@ -143,6 +155,27 @@ class GraphQLTest @Autowired constructor(
             youtubeUrl = "https://www.youtube.com/watch?v=$code"
         }
     )
+
+    @Test
+    fun `lists every episode to signed-in users, and only the released ones to anyone else`() {
+        released("gq-e1", LocalDate.of(2001, 1, 1))
+        episodes.save(Episode(title = "Being made", code = "gq-e2"))
+        episodes.save(Episode(title = "gq-e3, an idea without a code", code = null))
+
+        // Other tests' episodes are there too
+        graphql("{ episodes { code title status } }", reader)
+            .andExpect(jsonPath("$.errors").doesNotExist())
+            .andExpect(jsonPath("$.data.episodes[*].code", hasItems("gq-e1", "gq-e2")))
+            .andExpect(jsonPath("$.data.episodes[*].title", hasItem("gq-e3, an idea without a code")))
+            // Codes latest first, those without one last
+            .andExpect(jsonPath("$.data.episodes[-1].code").value(nullValue()))
+
+        graphql("{ episodes { code status } }")
+            .andExpect(jsonPath("$.errors").doesNotExist())
+            .andExpect(jsonPath("$.data.episodes[*].code", hasItem("gq-e1")))
+            .andExpect(jsonPath("$.data.episodes[*].code", not(hasItem("gq-e2"))))
+            .andExpect(jsonPath("$.data.episodes[*].status", everyItem(equalTo("PUBLISHED"))))
+    }
 
     @Test
     fun `lists the latest released episodes to anyone, the most recently aired first, with their people`() {

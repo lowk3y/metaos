@@ -5,6 +5,14 @@ export function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error)
 }
 
+/** A file from MetaOS that needs the sign-in token, e.g. a thumbnail, as a URL to show it from memory; revoke it after */
+export async function fetchObjectUrl(path: string): Promise<string> {
+  const token = await useAuthStore().token()
+  const response = await fetch(path, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+  if (!response.ok) throw new Error(`MetaOS answered ${response.status}`)
+  return URL.createObjectURL(await response.blob())
+}
+
 /** Asks MetaOS's GraphQL API (/graphql), as the signed-in user when there is one */
 export async function graphql<T>(query: string, variables: Record<string, unknown> = {}): Promise<T> {
   const token = await useAuthStore().token()

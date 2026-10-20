@@ -5,8 +5,9 @@ import DocLinks from '@/components/DocLinks.vue'
 import EpisodeItem from '@/components/EpisodeItem.vue'
 import HistoryTimeline from '@/components/HistoryTimeline.vue'
 import KoofrFolderList from '@/components/KoofrFolderList.vue'
+import PhotoStrip from '@/components/PhotoStrip.vue'
 import SignInPrompt from '@/components/SignInPrompt.vue'
-import { EPISODE_FIELDS, formatDate, HISTORY_FIELDS, KOOFR_FIELDS, type SessionDetails } from '@/episodes'
+import { EPISODE_FIELDS, formatDate, HISTORY_FIELDS, KOOFR_FIELDS, photosOf, type SessionDetails } from '@/episodes'
 import { errorMessage, graphql } from '@/graphql'
 import { useAuthStore } from '@/stores/auth'
 
@@ -73,6 +74,11 @@ watch([() => route.params.id, () => auth.authenticated], async ([id, authenticat
             <dd><KoofrFolderList :folders="session.koofrFolders"/></dd>
           </div>
         </dl>
+      </section>
+
+      <section v-if="photosOf(session.koofrFolders).length" aria-labelledby="photos">
+        <div class="heading"><h2 id="photos">Photos</h2></div>
+        <PhotoStrip :photos="photosOf(session.koofrFolders)" :folder="session.koofrFolders[0]?.url"/>
       </section>
 
       <section aria-labelledby="episodes">

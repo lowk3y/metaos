@@ -14,6 +14,12 @@ type Query {
     "Recorded episodes that aren't public yet, the earliest recorded first. Needs a signed-in user."
     inProduction: [Episode!]!
 
+    """
+    Every episode, the latest season and episode first and ideas without a code last. Anyone not signed in gets only
+    the released (PUBLISHED) ones.
+    """
+    episodes: [Episode!]!
+
     "An episode by its code (e.g. S05E08) or ID; null if there's none. Needs a signed-in user."
     episode(ref: String!): Episode
 
@@ -63,6 +69,23 @@ type KoofrFolder {
     place: String!
     placeName: String
     path: String!
+    "The folder in Koofr's web app, for anyone the place is shared with"
+    url: String!
+    """
+    The first photos in the folder by name: those right in it, then those in the folders right in it; at most 12.
+    None without a signed-in user, or when Koofr doesn't answer.
+    """
+    photos(limit: Int! = 4): [KoofrPhoto!]!
+}
+
+"A photo in a Koofr folder"
+type KoofrPhoto {
+    name: String!
+    path: String!
+    "MetaOS's path to a thumbnail, 512 px wide; it needs the bearer token, as the rest of the API does"
+    thumbnail: String!
+    "The folder it's in, in Koofr's web app"
+    url: String!
 }
 
 "A change from the audit log, told as what happened"
