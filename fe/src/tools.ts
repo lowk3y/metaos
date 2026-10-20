@@ -116,6 +116,21 @@ export const TOOL_GROUPS: ToolGroup[] = [
     ],
   },
   {
+    id: 'dropbox',
+    title: 'Dropbox',
+    about: "the folders shared with Ogrodje's bot, like Artwork",
+    tools: [
+      { name: 'list_dropbox_places', description: "The folders shared with Ogrodje's bot, and whether it may change them" },
+      { name: 'list_dropbox_folder', description: 'What is in a folder' },
+      { name: 'search_dropbox', description: 'Search for files and folders by name' },
+      { name: 'read_dropbox_file', description: 'Read a text file: txt, md, csv, json, srt and the like' },
+      { name: 'view_dropbox_image', description: 'Look at a picture, e.g. artwork for an episode' },
+      { name: 'upload_dropbox_file', description: 'Upload a file; one of the same name is only replaced when asked' },
+      { name: 'create_dropbox_folder', description: 'Create a folder' },
+      { name: 'move_dropbox_file', description: 'Move or rename a file or folder' },
+    ],
+  },
+  {
     id: 'history',
     title: 'History',
     about: 'who changed what, and when',

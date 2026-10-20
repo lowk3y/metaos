@@ -73,6 +73,13 @@ spec:
             # Cloud Storage is off without it
             - name: GOOGLE_STORAGE_KEY
               valueFrom: { secretKeyRef: { name: metaos-secret, key: google_storage_key, optional: true } }
+            # Dropbox is off without its refresh token (dropbox/refresh_token.sh)
+            - name: DROPBOX_APP_KEY
+              valueFrom: { secretKeyRef: { name: metaos-secret, key: dropbox_app_key, optional: true } }
+            - name: DROPBOX_APP_SECRET
+              valueFrom: { secretKeyRef: { name: metaos-secret, key: dropbox_app_secret, optional: true } }
+            - name: DROPBOX_REFRESH_TOKEN
+              valueFrom: { secretKeyRef: { name: metaos-secret, key: dropbox_refresh_token, optional: true } }
 
           # On the port that serves traffic: actuator's 9090 is a second Tomcat, which says UP even when 8080 hangs.
           # Flyway migrates before the app is up; liveness only starts counting once the startup probe has passed, and

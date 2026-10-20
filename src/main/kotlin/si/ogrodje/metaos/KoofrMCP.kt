@@ -21,9 +21,10 @@ private const val SEARCH_RESULTS = 25
 private val TEXT_TYPES = setOf("application/json", "application/xml", "application/x-yaml", "application/yaml", "application/x-subrip")
 private val TEXT_EXTENSIONS = setOf("txt", "md", "markdown", "csv", "tsv", "json", "xml", "yaml", "yml", "srt", "vtt", "html", "htm")
 
-private fun isText(file: KoofrFile) =
-    file.contentType?.substringBefore(';')?.trim()?.let { it.startsWith("text/") || it in TEXT_TYPES } == true ||
-        file.name.substringAfterLast('.', "").lowercase() in TEXT_EXTENSIONS
+/** Whether a file is text, by its type or else its extension - also for Dropbox's files */
+fun isTextFile(name: String, contentType: String?) =
+    contentType?.substringBefore(';')?.trim()?.let { it.startsWith("text/") || it in TEXT_TYPES } == true ||
+        name.substringAfterLast('.', "").lowercase() in TEXT_EXTENSIONS
 
 /** "/a/b", from "a/b" or "/a/b/"; no ".." */
 fun koofrPath(path: String?): String {
@@ -90,7 +91,7 @@ class KoofrMCP(private val koofr: Koofr, private val events: ApplicationEventPub
         val placeId = place(place).id
         val file = requireNotNull(koofr.file(placeId, koofrPath(path))) { "There's no $path in Koofr" }
         require(!file.folder) { "$path is a folder; list_koofr_folder lists it" }
-        require(isText(file)) { "$path isn't a text file (${file.contentType}, ${file.size} bytes)" }
+        require(isTextFile(file.name, file.contentType)) { "$path isn't a text file (${file.contentType}, ${file.size} bytes)" }
         val bytes = koofr.read(placeId, file.path, MAX_READ + 1)
         return KoofrContentDto(file, bytes.copyOf(minOf(bytes.size, MAX_READ)).toString(Charsets.UTF_8), bytes.size > MAX_READ)
     }

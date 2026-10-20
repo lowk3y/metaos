@@ -161,6 +161,24 @@ replaces anything unasked.
 - The `koofr` health check uses it every hour and reports a rejected password there, in `metaos_koofr_connected` and in
   the log. `KoofrTest` runs against the real account (read-only) when the app password is in the environment.
 
+### Dropbox
+
+The bot account has Dropbox too ([`Dropbox.kt`](src/main/kotlin/si/ogrodje/metaos/Dropbox.kt)), for the folders shared
+with it, like Artwork, which has the episodes' artwork. As with Koofr, `DropboxMCP` works only in those: it lists,
+searches, reads text, shows pictures (`view_dropbox_image`, as an image MCP clients give their model), uploads, creates
+folders and moves or renames, but never deletes or replaces anything unasked.
+
+- It goes through MetaOS's own Dropbox app (scoped access, Full Dropbox), with a refresh token of the bot's from
+  [`dropbox/refresh_token.sh`](dropbox/refresh_token.sh), which also says how to make the app. Dropbox's API never takes
+  the account's password.
+- `DROPBOX_APP_KEY`, `DROPBOX_APP_SECRET` and `DROPBOX_REFRESH_TOKEN` (`.envrc`) turn it on; it's off without the
+  refresh token. In production they're in `metaos-secret` (`k8s/set_secrets.sh`).
+- A place is a shared folder, by its ID, which is also its namespace's (`ns:<id>/path`): that finds it wherever the bot
+  has it in its Dropbox. Search only sees the folders that are in the bot's Dropbox ("Add to Dropbox"), and finds them
+  by where they are there.
+- The `dropbox` health check uses it every hour and reports a rejected token there, in `metaos_dropbox_connected` and in
+  the log. `DropboxTest` runs against the real account (read-only) when the refresh token is in the environment.
+
 ### Deployment
 
 Production runs on the ogrodje-one Kubernetes cluster, namespace `metaos-prod`: the app at `https://metaos.ogrodje.si`

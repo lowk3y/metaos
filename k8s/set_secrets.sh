@@ -14,6 +14,9 @@
 #   KOOFR_APP_PASSWORD            optional, the bot's Koofr app password; Koofr stays off without it
 #   PROD_GOOGLE_STORAGE_KEY       optional, the key of production's storage service account (google/storage.sh key
 #                                 prod); Cloud Storage stays off without it
+#   DROPBOX_APP_KEY, DROPBOX_APP_SECRET, DROPBOX_REFRESH_TOKEN
+#                                 optional, MetaOS's Dropbox app and the bot's refresh token (dropbox/refresh_token.sh);
+#                                 Dropbox stays off without them
 # The DB passwords go into SQL literals, so keep them alphanumeric: `openssl rand -hex 24`.
 set -euo pipefail
 
@@ -50,6 +53,9 @@ kubectl create secret generic metaos-secret -n "$NS" \
   --from-literal=google_gmail_refresh_token="${GOOGLE_GMAIL_REFRESH_TOKEN:-}" \
   --from-literal=koofr_app_password="${KOOFR_APP_PASSWORD:-}" \
   --from-literal=google_storage_key="${PROD_GOOGLE_STORAGE_KEY:-}" \
+  --from-literal=dropbox_app_key="${DROPBOX_APP_KEY:-}" \
+  --from-literal=dropbox_app_secret="${DROPBOX_APP_SECRET:-}" \
+  --from-literal=dropbox_refresh_token="${DROPBOX_REFRESH_TOKEN:-}" \
   --dry-run=client -o yaml | kubectl apply -f -
 
 kubectl create secret generic keycloak-secret -n "$NS" \

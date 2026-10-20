@@ -80,6 +80,8 @@ dependencies {
 
     // Koofr, as Ogrodje's bot account (Koofr.kt)
     implementation("com.github.koofr:java-koofr:3.8.10")
+    // Dropbox, as Ogrodje's bot account (Dropbox.kt)
+    implementation("com.dropbox.core:dropbox-core-sdk:8.0.2")
 }
 
 dependencyManagement {

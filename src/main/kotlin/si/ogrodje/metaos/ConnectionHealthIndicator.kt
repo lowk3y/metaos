@@ -10,9 +10,9 @@ import java.time.Instant
 import java.util.concurrent.TimeUnit
 
 /**
- * Checks every hour that a connection to an outside service (Google Drive, Gmail, Cloud Storage, Koofr) still works.
- * That keeps its credentials in use - Google drops refresh tokens that go unused for six months - and broken ones show
- * up right away: in the health check, the metaos_<name>_connected metric and the log, not only when something next
+ * Checks every hour that a connection to an outside service (Google Drive, Gmail, Cloud Storage, Koofr, Dropbox) still
+ * works. That keeps its credentials in use - Google drops refresh tokens that go unused for six months - and broken ones
+ * show up right away: in the health check, the metaos_<name>_connected metric and the log, not only when something next
  * needs them.
  */
 abstract class ConnectionHealthIndicator(private val name: String, registry: MeterRegistry) : HealthIndicator {
