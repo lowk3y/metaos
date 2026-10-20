@@ -60,16 +60,21 @@ export const useAuthStore = defineStore('auth', () => {
     keycloak?.logout({ redirectUri: `${location.origin}/` })
   }
 
-  /** An access token for MetaOS's API, refreshed when it's about to expire; none when signed out */
+  /**
+   * An access token for MetaOS's API, refreshed when it's about to expire; none when signed out. When Keycloak can't be
+   * asked, e.g. right after waking up offline or while it restarts, the user stays signed in and this fails instead.
+   */
   async function token(): Promise<string | undefined> {
     if (!keycloak?.authenticated) return undefined
     try {
       await keycloak.updateToken(30)
-    } catch {
-      // The Keycloak session is over
-      keycloak.clearToken()
-      authenticated.value = false
-      return undefined
+    } catch (error) {
+      // keycloak-js drops the tokens only when Keycloak refuses the refresh token: the Keycloak session is over
+      if (!keycloak.authenticated) {
+        authenticated.value = false
+        return undefined
+      }
+      throw new Error("Couldn't refresh the sign-in with Keycloak; try again in a moment", { cause: error })
     }
     return keycloak.token
   }

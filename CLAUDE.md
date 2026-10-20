@@ -71,6 +71,10 @@ docker compose up -d keycloak   # http://localhost:8180 (admin console: admin / 
   [`keycloak/frontend_client.sh`](keycloak/frontend_client.sh) sets them up in a realm imported without them, e.g.
   production's (`METAOS_UI_URL` and `METAOS_API_URL` default to production's).
 - Dev login: `dev` / `dev`.
+- A sign-in lasts 7 days without use and 30 days at most (`ssoSessionIdleTimeout`, `ssoSessionMaxLifespan`; for
+  realms imported before, [`keycloak/sessions.sh`](keycloak/sessions.sh)), and refresh tokens as long. Access tokens
+  last 5 minutes; keycloak-js keeps them in memory and refreshes them before each request (`fe/src/stores/auth.ts`),
+  and only signs the page out when Keycloak refuses the refresh token, not when it can't be reached.
 - `METAOS_MCP_URL` (default `http://localhost:8080/mcp`) and `METAOS_API_URL` (default
   `http://localhost:8080/graphql`) must be the public URLs of `/mcp` and `/graphql`; they are used by both Keycloak
   (token audience) and the app (audience check). `METAOS_UI_URL` (default `http://localhost:5173`) is where the

@@ -8,6 +8,8 @@
   "duplicateEmailsAllowed": false,
   "resetPasswordAllowed": false,
   "bruteForceProtected": true,
+  "ssoSessionIdleTimeout": 604800,
+  "ssoSessionMaxLifespan": 2592000,
   "attributes": {
     "CreateDefaultClientScopes": "true"
   },
