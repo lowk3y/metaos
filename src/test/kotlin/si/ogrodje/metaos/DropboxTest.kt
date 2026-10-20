@@ -53,7 +53,8 @@ class FakeDropbox : Dropbox {
         files.getValue(place to path).second!!.let { it.copyOf(minOf(it.size, maxBytes)) }
 
     // The image itself stands in for its thumbnail
-    override fun thumbnail(place: String, path: String, size: String) = DropboxImage("image/jpeg", files.getValue(place to path).second!!)
+    override fun thumbnail(place: String, path: String, size: String) =
+        DropboxImage("image/jpeg", requireNotNull(files[place to path]?.second) { "Dropbox can't make a picture of $path: path not found" })
 
     override fun upload(place: String, folder: String, name: String, content: ByteArray, overwrite: Boolean): DropboxFile {
         val path = "${folder.trimEnd('/')}/$name"

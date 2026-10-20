@@ -18,6 +18,7 @@ import org.springframework.stereotype.Component
 import org.springframework.stereotype.Controller
 import java.net.URLEncoder
 import java.time.LocalDate
+import java.time.OffsetDateTime
 import java.util.UUID
 
 /*
@@ -26,7 +27,6 @@ import java.util.UUID
  */
 
 const val MAX_RELEASED_EPISODES = 20
-const val MAX_PHOTOS = 12
 
 private const val SIGNED_IN = "hasAuthority('SCOPE_$API_READ_SCOPE')"
 
@@ -196,12 +196,12 @@ class KoofrGraphQL(
         return folders.associateWith { names[it.place] }
     }
 
-    // None when Koofr is off or doesn't answer: a page doesn't fail for want of photos
+    // All of them without a limit. None when Koofr is off or doesn't answer: a page doesn't fail for want of photos.
     @SchemaMapping(typeName = "KoofrFolder", field = "photos")
-    fun photos(folder: KoofrFolderLinkDto, @Argument limit: Int): List<KoofrPhotoDto> {
-        require(limit in 1..MAX_PHOTOS) { "limit must be between 1 and $MAX_PHOTOS" }
+    fun photos(folder: KoofrFolderLinkDto, @Argument limit: Int?): List<KoofrPhotoDto> {
+        require(limit == null || limit > 0) { "limit must be at least 1" }
         val photos = photos.ifAvailable?.takeIf { signedIn() } ?: return emptyList()
-        return runCatching { photos.of(folder.place, folder.path, limit) }.getOrDefault(emptyList())
+        return runCatching { photos.of(folder.place, folder.path, limit ?: Int.MAX_VALUE) }.getOrDefault(emptyList())
             .map { KoofrPhotoDto(it.place, it.path, it.name) }
     }
 }
@@ -221,13 +221,24 @@ private fun dropboxUrl(place: DropboxPlace?, path: String): String {
  */
 data class DropboxFolderLinkDto(val place: String, val placeName: String?, val path: String, val missing: Boolean, val url: String)
 
+/**
+ * A picture in a linked Dropbox folder: its thumbnail from MetaOS (DropboxPictures), whose path changes with the
+ * picture, so one replaced under the same name isn't shown from the cache; and its folder's [url]
+ */
+data class DropboxPictureDto(val place: String, val path: String, val name: String, val modified: OffsetDateTime?, val url: String) {
+    val thumbnail = "/dropbox/thumbnail?place=${queryValue(place)}&path=${queryValue(path)}" +
+        modified?.let { "&v=${it.toEpochSecond()}" }.orEmpty()
+}
+
 // Dropbox folders are the team's too, so others get none. Lists of episodes have them as well, so they're batched, and
-// found by their IDs in DropboxFolderIndex, which asks Dropbox once per shared folder and minute.
+// found by their IDs in DropboxFolderIndex, which asks Dropbox once per shared folder and minute. Dropbox is only asked
+// for pictures when a query wants them.
 @Controller
 class DropboxGraphQL(
     private val episodeFolders: EpisodeDropboxFoldersRepository,
     private val sessionFolders: SessionDropboxFoldersRepository,
     private val index: ObjectProvider<DropboxFolderIndex>,
+    private val pictures: ObjectProvider<DropboxPictures>,
 ) {
 
     @BatchMapping(typeName = "Episode", field = "dropboxFolders")
@@ -246,6 +257,16 @@ class DropboxGraphQL(
         return sessions.associateWith { session ->
             bySession[session].orEmpty().map { found.link(it.place, it.folderId, it.path, it.url) }.sortedBy { it.path }
         }
+    }
+
+    // All of them without a limit. None when Dropbox is off or doesn't answer, or the folder is missing: a page doesn't
+    // fail for want of pictures.
+    @SchemaMapping(typeName = "DropboxFolder", field = "pictures")
+    fun pictures(folder: DropboxFolderLinkDto, @Argument limit: Int?): List<DropboxPictureDto> {
+        require(limit == null || limit > 0) { "limit must be at least 1" }
+        val pictures = pictures.ifAvailable?.takeIf { signedIn() && !folder.missing } ?: return emptyList()
+        return runCatching { pictures.of(folder.place, folder.path, limit ?: Int.MAX_VALUE) }.getOrDefault(emptyList())
+            .map { DropboxPictureDto(it.place, it.path, it.name, it.modified, folder.url) }
     }
 
     // What Dropbox says about the places of some links; nothing when it's off or doesn't answer, as a page doesn't fail

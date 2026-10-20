@@ -1,0 +1,21 @@
+// A section's heading, and how many things are in it. In page.scss, and on its own for components that make a whole
+// section, e.g. PhotoStrip
+
+.heading {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding-bottom: 12px;
+
+  h2 {
+    font-size: 15px;
+    line-height: 24px;
+    font-weight: 600;
+  }
+}
+
+.count, .note {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted);
+}

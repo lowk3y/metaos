@@ -80,10 +80,10 @@ type KoofrFolder {
     "The folder in Koofr's web app, for anyone the place is shared with"
     url: String!
     """
-    The first photos in the folder by name: those right in it, then those in the folders right in it; at most 12.
-    None without a signed-in user, or when Koofr doesn't answer.
+    The photos in the folder by name: those right in it, then those in the folders right in it; all of them, or the
+    first limit. None without a signed-in user, or when Koofr doesn't answer.
     """
-    photos(limit: Int! = 4): [KoofrPhoto!]!
+    photos(limit: Int): [KoofrPhoto!]!
 }
 
 """
@@ -101,6 +101,21 @@ type DropboxFolder {
     A link to the folder that only those with access to it can open, wherever they have it in their Dropbox; or, while
     there's none, its path in Dropbox's web app, for those who have the place where the bot has it
     """
+    url: String!
+    """
+    The pictures in the folder by name, e.g. an episode's artwork: those right in it, then those in the folders right in
+    it; all of them, or the first limit. None without a signed-in user, when it's missing, or when Dropbox doesn't answer.
+    """
+    pictures(limit: Int): [DropboxPicture!]!
+}
+
+"A picture in a Dropbox folder: jpg, png, gif, webp, tiff or bmp"
+type DropboxPicture {
+    name: String!
+    path: String!
+    "MetaOS's path to a thumbnail, at most 640 × 480; it needs the bearer token, as the rest of the API does"
+    thumbnail: String!
+    "The linked folder it's in, as the folder's url opens it"
     url: String!
 }
 

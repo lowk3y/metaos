@@ -2,6 +2,8 @@ package si.ogrodje.metaos
 
 import org.hamcrest.Matchers.contains
 import org.hamcrest.Matchers.empty
+import org.hamcrest.Matchers.equalTo
+import org.hamcrest.Matchers.everyItem
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -10,10 +12,12 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
 import org.springframework.context.annotation.Primary
+import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.ResultActions
+import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.request.RequestPostProcessor
@@ -37,6 +41,7 @@ class DropboxFoldersTest @Autowired constructor(
     private val foldersMCP: DropboxFoldersMCP,
     private val auditMCP: AuditMCP,
     private val history: History,
+    private val pictures: DropboxPictures,
     private val mvc: MockMvc,
 ) {
 
@@ -47,7 +52,59 @@ class DropboxFoldersTest @Autowired constructor(
         fun fakeDropbox() = FakeDropbox().apply {
             place("1001", "Artwork")
             place("1002", "Brand")
+            // Pictures' own, as DropboxFolderIndex keeps the folders it saw in a place for a minute
+            place("1003", "Pictures")
         }
+    }
+
+    @Test
+    fun `shows the pictures in an episode's folders, then those in its folders, and thumbnails only of those to signed-in users`() {
+        episodesRepository.saveAndFlush(Episode(title = "Pictures", code = "S09E44"))
+        dropbox.put("1003", "/S09E44", null)
+        dropbox.put("1003", "/S09E44/brief.md", "# Naslovnica".toByteArray())
+        dropbox.put("1003", "/S09E44/podcast.png", byteArrayOf(1, 2, 3))
+        dropbox.put("1003", "/S09E44/B variants", null)
+        listOf("3.jpg", "1.jpg", "2.webp", "4.jpg").forEach { dropbox.put("1003", "/S09E44/B variants/$it", byteArrayOf(4)) }
+        dropbox.put("1003", "/S09E44/B variants/deeper", null)
+        dropbox.put("1003", "/S09E44/B variants/deeper/5.jpg", byteArrayOf(5))
+        dropbox.put("1003", "/S09E44/A empty", null)
+        dropbox.put("1003", "/elsewhere.png", byteArrayOf(6))
+        val link = foldersMCP.linkEpisode("S09E44", "Pictures", "/S09E44").url
+
+        // The folder's own first, then its folders' by name; no further than needed
+        assertEquals(listOf("podcast.png"), pictures.of("1003", "/S09E44", limit = 1).map { it.name })
+        val reader = jwt().jwt { it.claim("scope", API_READ_SCOPE) }
+        val found = "$.data.episode.dropboxFolders[0].pictures"
+        graphql("""{ episode(ref: "S09E44") { dropboxFolders { pictures(limit: 4) { name path thumbnail url } } } }""", reader)
+            .andExpect(jsonPath("$.errors").doesNotExist())
+            .andExpect(jsonPath("$found[*].name", contains("podcast.png", "1.jpg", "2.webp", "3.jpg")))
+            .andExpect(jsonPath("$found[1].path").value("/S09E44/B variants/1.jpg"))
+            .andExpect(jsonPath("$found[1].thumbnail").value("/dropbox/thumbnail?place=1003&path=%2FS09E44%2FB%20variants%2F1.jpg"))
+            .andExpect(jsonPath("$found[*].url", everyItem(equalTo(link))))
+        // All of them without a limit
+        graphql("""{ episode(ref: "S09E44") { dropboxFolders { pictures { name } } } }""", reader)
+            .andExpect(jsonPath("$found[*].name", contains("podcast.png", "1.jpg", "2.webp", "3.jpg", "4.jpg")))
+        graphql("""{ episode(ref: "S09E44") { dropboxFolders { pictures(limit: 0) { name } } } }""", reader)
+            .andExpect(jsonPath("$.errors[0].message").value("limit must be at least 1"))
+
+        fun thumbnail(path: String, place: String = "1003", auth: RequestPostProcessor? = reader) =
+            mvc.get("/dropbox/thumbnail") { param("place", place); param("path", path); auth?.let { with(it) } }
+
+        thumbnail("/S09E44/podcast.png", auth = null).andExpect { status { isUnauthorized() } }
+        thumbnail("/S09E44/podcast.png", auth = jwt().jwt { it.claim("scope", MCP_SCOPE) }).andExpect { status { isForbidden() } }
+        thumbnail("/S09E44/podcast.png").andExpect {
+            status { isOk() }
+            content { contentType("image/jpeg"); bytes(byteArrayOf(1, 2, 3)) }
+            header { string(HttpHeaders.CACHE_CONTROL, "max-age=86400, private") }
+        }
+        thumbnail("/S09E44/B variants/4.jpg").andExpect { status { isOk() } }
+        // Not a picture, deeper than a folder in it, not in a linked folder, a way out of it, gone, in another place
+        // (not Artwork, whose folders the other tests need DropboxFolderIndex to see fresh) or in none shared with the bot
+        listOf(
+            "1003" to "/S09E44/brief.md", "1003" to "/S09E44/B variants/deeper/5.jpg", "1003" to "/elsewhere.png",
+            "1003" to "/S09E44/../elsewhere.png", "1003" to "/S09E44/gone.png", "1002" to "/S09E44/podcast.png",
+            "1004" to "/S09E44/podcast.png",
+        ).forEach { (place, path) -> thumbnail(path, place).andExpect { status { isNotFound() } } }
     }
 
     @Test

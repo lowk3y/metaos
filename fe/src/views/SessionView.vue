@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import DocLinks from '@/components/DocLinks.vue'
 import DropboxFolderList from '@/components/DropboxFolderList.vue'
@@ -40,6 +40,9 @@ watch([() => route.params.id, () => auth.authenticated], async ([id, authenticat
     if (load === loads) error.value = errorMessage(e)
   }
 }, { immediate: true })
+
+// Once for the session, as the photos page through them from the first again when they change
+const photos = computed(() => (session.value ? photosOf(session.value.koofrFolders) : []))
 </script>
 
 <template>
@@ -82,10 +85,7 @@ watch([() => route.params.id, () => auth.authenticated], async ([id, authenticat
         </dl>
       </section>
 
-      <section v-if="photosOf(session.koofrFolders).length" aria-labelledby="photos">
-        <div class="heading"><h2 id="photos">Photos</h2></div>
-        <PhotoStrip :photos="photosOf(session.koofrFolders)" :folder="session.koofrFolders[0]?.url"/>
-      </section>
+      <PhotoStrip v-if="photos.length" title="Photos" :photos="photos" :folder="session.koofrFolders[0]?.url" service="Koofr"/>
 
       <section aria-labelledby="episodes">
         <div class="heading">

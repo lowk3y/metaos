@@ -154,10 +154,11 @@ replaces anything unasked.
   `session_koofr_folders`). Koofr has no file IDs, so a link is a place (mount ID) and a path: moves through
   `move_koofr_file` take the links along, while a folder moved in the Koofr app leaves its links listed as missing.
 - On the front-end's episode and session pages, a linked folder links to Koofr's web app (`app.koofr.net/app/storage/
-  <place>?path=...`; a shared place has the same ID for everyone it's shared with), and shows its first photos:
-  those right in it, then those in the folders right in it ([`KoofrPhotos.kt`](src/main/kotlin/si/ogrodje/metaos/KoofrPhotos.kt)).
-  Koofr makes the thumbnails; MetaOS passes them on at `/koofr/thumbnail`, behind `metaos:read` and only for those
-  photos, so the page fetches them with its token. In lists, Koofr's logo links to an episode's or session's folders,
+  <place>?path=...`; a shared place has the same ID for everyone it's shared with), and shows its photos, eight at a
+  time with arrows to the rest (`PhotoStrip.vue`): those right in it, then those in the folders right in it
+  ([`KoofrPhotos.kt`](src/main/kotlin/si/ogrodje/metaos/KoofrPhotos.kt)). Koofr makes the thumbnails; MetaOS passes
+  them on at `/koofr/thumbnail`, behind `metaos:read` and only for those photos, so the page fetches them with its
+  token, only for the photos it shows and the next ones. In lists, Koofr's logo links to an episode's or session's folders,
   as the doc icon does to its Google Docs; the API batches the folders, and asks Koofr only for place names and photos.
 - The `koofr` health check uses it every hour and reports a rejected password there, in `metaos_koofr_connected` and in
   the log. `KoofrTest` runs against the real account (read-only) when the app password is in the environment.
@@ -190,6 +191,12 @@ folders and moves or renames, but never deletes or replaces anything unasked.
 - On the front-end, a linked folder shows like a Koofr one: Dropbox's logo in lists, and in the episode's and session's
   details, opening its link for members, or else its path in Dropbox's web app as the bot has it. Lists ask Dropbox
   where the folders are once per place and minute (`DropboxFolderIndex`), not per folder.
+- An episode's page shows the pictures in its folders as its Artwork, above its photos and like them, eight at a
+  time: each whole, as covers,
+  thumbnails and stories have different shapes, and by file name, as that says what it's for. As with Koofr's photos,
+  they're those right in a folder, then those in the folders right in it ([`DropboxPictures.kt`](src/main/kotlin/si/ogrodje/metaos/DropboxPictures.kt)).
+  Dropbox makes the thumbnails; MetaOS passes them on at `/dropbox/thumbnail`, behind `metaos:read` and only for those
+  pictures, which it checks against the linked folders' IDs through `DropboxFolderIndex`.
 - The `dropbox` health check uses it every hour and reports a rejected token there, in `metaos_dropbox_connected` and in
   the log. `DropboxTest` runs against the real account (read-only) when the refresh token is in the environment.
 

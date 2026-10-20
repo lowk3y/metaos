@@ -88,6 +88,7 @@ interface EpisodeDropboxFoldersRepository : JpaRepository<EpisodeDropboxFolder, 
 
     fun findByEpisodeAndFolderId(episode: Episode, folderId: String): EpisodeDropboxFolder?
     fun findByEpisodeAndPlaceAndPath(episode: Episode, place: String, path: String): EpisodeDropboxFolder?
+    fun existsByPlaceAndFolderId(place: String, folderId: String): Boolean
 }
 
 interface SessionDropboxFoldersRepository : JpaRepository<SessionDropboxFolder, UUID> {
@@ -98,6 +99,7 @@ interface SessionDropboxFoldersRepository : JpaRepository<SessionDropboxFolder, 
 
     fun findBySessionAndFolderId(session: Session, folderId: String): SessionDropboxFolder?
     fun findBySessionAndPlaceAndPath(session: Session, place: String, path: String): SessionDropboxFolder?
+    fun existsByPlaceAndFolderId(place: String, folderId: String): Boolean
 }
 
 // How long what Dropbox said stays good for lists

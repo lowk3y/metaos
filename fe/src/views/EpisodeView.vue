@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
 import DocLinks from '@/components/DocLinks.vue'
@@ -12,8 +12,8 @@ import ShowBadge from '@/components/ShowBadge.vue'
 import SignInPrompt from '@/components/SignInPrompt.vue'
 import { brands } from '@/brands'
 import {
-  DROPBOX_FIELDS, EPISODE_FIELDS, type EpisodeDetails, formatDate, HISTORY_FIELDS, KOOFR_FIELDS, links, photosOf, roleName,
-  sessionPath, sessionTitle, statusName,
+  ARTWORK_FIELDS, artworkOf, DROPBOX_FIELDS, EPISODE_FIELDS, type EpisodeDetails, formatDate, HISTORY_FIELDS, KOOFR_FIELDS,
+  links, photosOf, roleName, sessionPath, sessionTitle, statusName,
 } from '@/episodes'
 import { errorMessage, graphql } from '@/graphql'
 import { useAuthStore } from '@/stores/auth'
@@ -36,13 +36,20 @@ watch([() => route.params.ref, () => auth.authenticated], async ([episodeRef, au
   if (!authenticated) return
   try {
     const data = await graphql<{ episode: EpisodeDetails | null }>(`query ($ref: String!) {
-      episode(ref: $ref) { ${EPISODE_FIELDS} titleB titleC summary machineSummary addedDate ${KOOFR_FIELDS} ${DROPBOX_FIELDS} ${HISTORY_FIELDS} }
+      episode(ref: $ref) {
+        ${EPISODE_FIELDS} titleB titleC summary machineSummary addedDate ${KOOFR_FIELDS} ${DROPBOX_FIELDS} ${ARTWORK_FIELDS}
+        ${HISTORY_FIELDS}
+      }
     }`, { ref: String(episodeRef) })
     if (load === loads) episode.value = data.episode
   } catch (e) {
     if (load === loads) error.value = errorMessage(e)
   }
 }, { immediate: true })
+
+// The pictures in its Dropbox folders, which open in the folder of the first; and its photos, in its first Koofr folder
+const artwork = computed(() => (episode.value ? artworkOf(episode.value.dropboxFolders) : []))
+const photos = computed(() => (episode.value ? photosOf(episode.value.koofrFolders) : []))
 </script>
 
 <template>
@@ -117,10 +124,8 @@ watch([() => route.params.ref, () => auth.authenticated], async ([episodeRef, au
         </dl>
       </section>
 
-      <section v-if="photosOf(episode.koofrFolders).length" aria-labelledby="photos">
-        <div class="heading"><h2 id="photos">Photos</h2></div>
-        <PhotoStrip :photos="photosOf(episode.koofrFolders)" :folder="episode.koofrFolders[0]?.url"/>
-      </section>
+      <PhotoStrip v-if="artwork.length" title="Artwork" :photos="artwork" :folder="artwork[0]?.url" service="Dropbox" artwork/>
+      <PhotoStrip v-if="photos.length" title="Photos" :photos="photos" :folder="episode.koofrFolders[0]?.url" service="Koofr"/>
 
       <section v-if="episode.people.length" aria-labelledby="people">
         <div class="heading">

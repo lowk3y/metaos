@@ -91,6 +91,19 @@ export interface DropboxFolder {
 /** A Dropbox folder as lists have it, for a link; only signed-in users get them */
 export type DropboxFolderLink = Pick<DropboxFolder, 'path' | 'url'>
 
+/** A picture in a Dropbox folder, e.g. artwork: its thumbnail, from MetaOS with the sign-in token, and its folder's link */
+export interface DropboxPicture {
+  name: string
+  path: string
+  thumbnail: string
+  url: string
+}
+
+/** A Dropbox folder with the first pictures in it, e.g. an episode's artwork */
+export interface DropboxFolderWithPictures extends DropboxFolder {
+  pictures: DropboxPicture[]
+}
+
 /** One field of a change; from and to are null when there's nothing short to show, e.g. a summary */
 export interface FieldChange {
   field: string
@@ -117,7 +130,7 @@ export interface EpisodeDetails extends Episode {
   machineSummary: string | null
   addedDate: string
   koofrFolders: KoofrFolder[]
-  dropboxFolders: DropboxFolder[]
+  dropboxFolders: DropboxFolderWithPictures[]
   history: Change[]
 }
 
@@ -130,15 +143,20 @@ export interface SessionDetails extends Session {
   history: Change[]
 }
 
-// Seven photos and a way to the rest fill two rows of four
-export const PHOTOS = 7
-
-export const KOOFR_FIELDS = `koofrFolders { place placeName path url photos(limit: ${PHOTOS}) { name path thumbnail url } }`
+// All the photos, as the page shows them a few at a time; their thumbnails it fetches only as they're shown
+export const KOOFR_FIELDS = 'koofrFolders { place placeName path url photos { name path thumbnail url } }'
 export const DROPBOX_FIELDS = 'dropboxFolders { place placeName path missing url }'
+// An episode's artwork: all the pictures in its Dropbox folders
+export const ARTWORK_FIELDS = 'dropboxFolders { pictures { name path thumbnail url } }'
 
-/** The first few photos of an episode's or session's Koofr folders */
-export function photosOf(folders: KoofrFolder[], limit = PHOTOS) {
-  return folders.flatMap((folder) => folder.photos).slice(0, limit)
+/** The photos of an episode's or session's Koofr folders */
+export function photosOf(folders: KoofrFolder[]) {
+  return folders.flatMap((folder) => folder.photos)
+}
+
+/** The pictures of an episode's Dropbox folders, its artwork */
+export function artworkOf(folders: DropboxFolderWithPictures[]) {
+  return folders.flatMap((folder) => folder.pictures)
 }
 export const HISTORY_FIELDS = 'history { at actor client tool summary fields { field from to } }'
 
