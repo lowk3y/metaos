@@ -14,6 +14,29 @@
   }
 }
 
+// A part of a section: a recording session on the home page, what's in the works or released of a season. As tall as
+// the icon links it may have.
+.subheading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 8px;
+  min-height: var(--icon-link);
+  padding: 28px 0 8px;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 600;
+
+  .count {
+    font-weight: 400;
+  }
+}
+
+// Right under the section's heading, the heading's own space is enough
+.heading + .subheading {
+  padding-top: 0;
+}
+
 .count, .note {
   font-size: 13px;
   line-height: 20px;

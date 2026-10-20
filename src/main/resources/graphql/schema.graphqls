@@ -15,10 +15,13 @@ type Query {
     inProduction: [Episode!]!
 
     """
-    Every episode, the latest season and episode first and ideas without a code last. Anyone not signed in gets only
-    the released (PUBLISHED) ones.
+    Every episode but the ideas, which ideas has, the latest season and episode first and those without a code last.
+    Anyone not signed in gets only the released (PUBLISHED) ones.
     """
     episodes: [Episode!]!
+
+    "The episode ideas (IDEA), the most recently added first. Needs a signed-in user."
+    ideas: [Episode!]!
 
     "An episode by its code (e.g. S05E08) or ID; null if there's none. Needs a signed-in user."
     episode(ref: String!): Episode
@@ -46,17 +49,24 @@ type Episode {
     status: EpisodeStatus!
     "The recording session it's part of"
     session: Session
+    "Who recommended it: by default the person of whoever added it. Null without a signed-in user."
+    recommendedBy: Person
     "When it is or was recorded, e.g. 2026-10-19"
     recordingDate: String
     "When it was released, e.g. 2026-10-19"
     airedDate: String
     "Description of the episode, in Markdown"
     summary: String
+    "Very short summary of the episode, e.g. a sentence, in Markdown"
+    tinySummary: String
     youtubeUrl: String
     spotifyUrl: String
     applePodcastsUrl: String
     patreonUrl: String
-    "The people on the episode, each once with all of their roles; hosts first"
+    """
+    The people on the episode, each once with all of their roles; hosts first, candidates last. Candidates only for a
+    signed-in user.
+    """
     people: [EpisodePerson!]!
     "Google Docs about the episode, e.g. its preparation doc, the first linked first. None without a signed-in user."
     documents: [Document!]!
@@ -205,6 +215,8 @@ enum Role {
     PRODUCER
     CONSULTANT
     DESIGNER
+    "Could be the episode's guest, e.g. an idea's, until they're confirmed as one"
+    CANDIDATE
 }
 
 type CurrentUser {

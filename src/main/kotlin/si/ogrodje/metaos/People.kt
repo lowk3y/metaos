@@ -66,7 +66,9 @@ enum class SocialNetwork(private vararg val domains: String) {
     }
 }
 
-enum class Role { HOST, CO_HOST, GUEST, PRODUCER, CONSULTANT, DESIGNER }
+// In the order an episode's people are listed. A candidate could be the episode's guest, until confirm_guest makes
+// them one; only the team sees them.
+enum class Role { HOST, CO_HOST, GUEST, PRODUCER, CONSULTANT, DESIGNER, CANDIDATE }
 
 @Entity
 @Table(name = "episode_people")
@@ -95,6 +97,9 @@ class EpisodePerson(
     override fun toString() = "EpisodePerson(id=$id, role=$role)"
 }
 
+/** The person linked to the signed-in user by their verified email; none without one */
+fun PeopleRepository.findSignedIn(): Person? = currentJwt()?.verifiedEmail?.let(::findByEmail)
+
 interface PeopleRepository : JpaRepository<Person, UUID> {
     fun findByEmail(email: String): Person?
 
@@ -120,6 +125,6 @@ interface EpisodePeopleRepository : JpaRepository<EpisodePerson, UUID> {
     @Query("select ep from EpisodePerson ep join fetch ep.person where ep.episode in :episodes")
     fun findByEpisodesWithPerson(episodes: Collection<Episode>): List<EpisodePerson>
 
-    @Query("select ep from EpisodePerson ep join fetch ep.episode e where ep.person = :person order by e.code desc")
+    @Query("select ep from EpisodePerson ep join fetch ep.episode e where ep.person = :person order by $LATEST_FIRST")
     fun findByPersonWithEpisode(person: Person): List<EpisodePerson>
 }

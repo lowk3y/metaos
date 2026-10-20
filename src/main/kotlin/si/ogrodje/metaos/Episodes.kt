@@ -43,6 +43,11 @@ class Episode(
     @JoinColumn(name = "show_id")
     var show: Show? = null
 
+    // Who recommended it: by default the person of whoever added it. Eager, for the same reason.
+    @ManyToOne
+    @JoinColumn(name = "recommended_by")
+    var recommendedBy: Person? = null
+
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     var id: UUID? = null
@@ -53,8 +58,9 @@ class Episode(
     @Column(columnDefinition = "text") var applePodcastsUrl: String? = null
     @Column(columnDefinition = "text") var patreonUrl: String? = null
 
-    // Markdown
+    // Markdown; the tiny summary is a very short one, e.g. a sentence
     @Column(columnDefinition = "text") var summary: String? = null
+    @Column(columnDefinition = "text") var tinySummary: String? = null
     @Column(columnDefinition = "text") var machineSummary: String? = null
 
     fun setLink(platform: Platform, url: String?) {
@@ -114,27 +120,41 @@ fun String.toUuidOrNull(): UUID? = runCatching { UUID.fromString(this) }.getOrNu
 fun EpisodesRepository.findByRef(ref: String): Episode? =
     ref.toUuidOrNull()?.let { findByIdOrNull(it) } ?: findByCode(ref)
 
+/** The season of one-off bonus episodes (S99E02), which isn't the latest one */
+const val BONUS_SEASON = "S99"
+
+// Episodes, as e, by code. Codes are zero-padded (S05E05), so descending puts the latest season and episode first;
+// then the bonus season, and ideas without a code last.
+const val LATEST_FIRST = "case when e.code is null then 2 when e.code like '${BONUS_SEASON}E%' then 1 else 0 end, e.code desc"
+
 interface EpisodesRepository : JpaRepository<Episode, UUID> {
     fun findByCode(code: String): Episode?
 
-    // Codes are zero-padded (S05E05), so descending puts the latest season and episode first; ideas without one last
-    @Query("select e from Episode e order by e.code desc nulls last")
+    @Query("select e from Episode e order by $LATEST_FIRST")
     fun findLatestFirst(): List<Episode>
 
     // The most recently aired first; those without an aired date after them, by code
-    @Query("select e from Episode e where e.status = :status order by e.airedDate desc nulls last, e.code desc nulls last")
+    @Query("select e from Episode e where e.status = :status order by e.airedDate desc nulls last, $LATEST_FIRST")
     fun findLatestAiredByStatus(status: EpisodeStatus, pageable: Pageable): List<Episode>
 
-    @Query("select e from Episode e where e.status = :status order by e.code desc nulls last")
+    @Query("select e from Episode e where e.status = :status order by $LATEST_FIRST")
     fun findLatestFirstByStatus(status: EpisodeStatus): List<Episode>
+
+    @Query("select e from Episode e where e.status <> :status order by $LATEST_FIRST")
+    fun findLatestFirstByStatusNot(status: EpisodeStatus): List<Episode>
+
+    // The most recently added first, e.g. the ideas
+    fun findByStatusOrderByAddedDateDescTitleAsc(status: EpisodeStatus): List<Episode>
 
     fun findByStatusIn(statuses: Collection<EpisodeStatus>): List<Episode>
 
-    @Query("select e from Episode e where e.session = :session order by e.code desc nulls last")
+    @Query("select e from Episode e where e.session = :session order by $LATEST_FIRST")
     fun findBySessionOrderByCodeDesc(session: Session): List<Episode>
 
-    @Query("select e from Episode e where e.show = :show order by e.code desc nulls last")
+    @Query("select e from Episode e where e.show = :show order by $LATEST_FIRST")
     fun findByShowOrderByCodeDesc(show: Show): List<Episode>
+
+    fun findByRecommendedBy(person: Person): List<Episode>
 
     // Soft-deleted episodes are hidden from JPA queries, so finding and restoring one takes native SQL
     @Query(
@@ -154,7 +174,24 @@ interface EpisodesRepository : JpaRepository<Episode, UUID> {
     fun restore(id: UUID): Int
 
     // Deleting a session or show takes its episodes out of it in the same transaction, so audit_log has them under
-    // the same changed_at as the soft delete. These put them back, unless they have been deleted or moved since.
+    // the same changed_at as the soft delete, as deleting a person takes them off the episodes they recommended. These
+    // put them back, unless they have been deleted or changed since.
+    @Modifying(clearAutomatically = true)
+    @Query(
+        """
+        update episodes set recommended_by = :personId
+        where deleted_at is null and recommended_by is null and id in (
+            select row_id from audit_log
+            where table_name = 'episodes'
+              and old_row ->> 'recommended_by' = cast(:personId as text) and new_row ->> 'recommended_by' is null
+              and changed_at = (select max(changed_at) from audit_log
+                                where table_name = 'people' and row_id = :personId
+                                  and old_row ->> 'deleted_at' is null and new_row ->> 'deleted_at' is not null))
+        """,
+        nativeQuery = true,
+    )
+    fun reattachToRecommender(personId: UUID): Int
+
     @Modifying(clearAutomatically = true)
     @Query(
         """

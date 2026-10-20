@@ -301,6 +301,12 @@ strong {
 
 // On phones the description goes under the tool's name, and a step's text under its number
 @media (max-width: 640px) {
+  // The other pages' narrower gutter (page.scss)
+  main {
+    padding: 32px 16px 64px;
+    gap: 48px;
+  }
+
   .step {
     grid-template-columns: 28px minmax(0, 1fr);
     column-gap: 8px;

@@ -1,0 +1,86 @@
+// What episode rows share (EpisodeItem, EpisodeRow, IdeaItem): the code's column, so codes and titles line up in a
+// list and from one list to the next, and the rule between rows
+
+$code-width: 72px;
+$code-width-phone: 60px;
+
+.episode {
+  column-gap: 16px;
+  border-top: 1px solid var(--rule);
+}
+
+.code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 22px;
+  color: var(--muted);
+}
+
+// A row with the tiny summary (EpisodeItem, IdeaItem): the title, the summary under it, two lines at most so a long one
+// doesn't push the list apart, a line of details, and the links on the title's line. On phones the summary gets more
+// lines and the links go under the details.
+@mixin summary-row {
+  .title {
+    font-size: 16px;
+    line-height: 24px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+
+    .show {
+      margin-left: 10px;
+      vertical-align: 2px;
+    }
+  }
+
+  .summary {
+    margin-top: 4px;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+  }
+
+  .details {
+    margin-top: 6px;
+    font-size: 13px;
+    line-height: 20px;
+    color: var(--muted);
+
+    > * + *::before {
+      content: '·';
+      content: '·' / '';
+      margin: 0 6px;
+    }
+
+    // A date, and a date with its label, stay on one line when the details wrap
+    time, .when {
+      white-space: nowrap;
+    }
+  }
+
+  // Names stand out from their labels
+  .guests, .person {
+    color: var(--secondary);
+  }
+
+  // As tall as the title's line, which the icon links centre on; the last glyph, not its hit area, lines up with the
+  // edge
+  .links {
+    display: flex;
+    align-items: center;
+    height: 24px;
+    margin-right: var(--icon-link-inset);
+  }
+
+  @media (max-width: 640px) {
+    .summary {
+      -webkit-line-clamp: 4;
+    }
+
+    // The first glyph, not its hit area, lines up with the text
+    .links {
+      height: auto;
+      margin: 4px 0 0 var(--icon-link-inset);
+    }
+  }
+}

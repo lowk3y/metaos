@@ -2,6 +2,7 @@
 import {ref, watch} from 'vue'
 import {RouterLink, RouterView} from 'vue-router'
 import {faDiscord, faGithub, faGoogle} from '@fortawesome/free-brands-svg-icons'
+import {faArrowRightFromBracket} from '@fortawesome/free-solid-svg-icons'
 import {FontAwesomeIcon} from '@fortawesome/vue-fontawesome'
 import {graphql} from '@/graphql'
 import {useAuthStore} from '@/stores/auth'
@@ -36,8 +37,10 @@ watch(() => auth.authenticated, async (authenticated) => {
         <RouterLink class="logo" to="/" aria-label="Ogrodje MetaOS, home"><img src="/favicon.png" alt=""/></RouterLink>
 
         <div class="pages">
-          <RouterLink to="/">Home</RouterLink>
+          <RouterLink class="home" to="/">Home</RouterLink>
           <RouterLink to="/episodes">Episodes</RouterLink>
+          <!-- The team's, so only for signed-in users -->
+          <RouterLink v-if="auth.authenticated" to="/ideas">Ideas</RouterLink>
           <RouterLink to="/usage">Usage</RouterLink>
         </div>
       </nav>
@@ -45,7 +48,10 @@ watch(() => auth.authenticated, async (authenticated) => {
       <div v-if="auth.ready" class="auth">
         <template v-if="auth.authenticated">
           <span class="name">{{ name }}</span>
-          <button type="button" class="button" @click="auth.logout()">Sign out</button>
+          <!-- On phones only the icon, so it fits beside the pages -->
+          <button type="button" class="button" aria-label="Sign out" title="Sign out" @click="auth.logout()">
+            <FontAwesomeIcon :icon="faArrowRightFromBracket"/><span class="long">Sign out</span>
+          </button>
         </template>
         <!-- On phones only the providers' names, so both fit -->
         <template v-else>
@@ -141,7 +147,34 @@ header {
     color: var(--secondary);
   }
 
+  // Phones: the page's narrower gutter, and the pages and buttons closer together, so they fit on one line
   @media (max-width: 640px) {
+    .wrapper {
+      padding: 0 16px;
+      column-gap: 12px;
+    }
+
+    nav {
+      gap: 8px;
+    }
+
+    .logo img {
+      height: 30px;
+    }
+
+    .pages a {
+      padding: 21px 8px;
+    }
+
+    // The logo leads home too, and without this link the others fit beside it
+    .pages .home {
+      display: none;
+    }
+
+    .auth {
+      gap: 8px;
+    }
+
     .name, .long {
       display: none;
     }
@@ -180,11 +213,17 @@ footer {
   .elsewhere {
     display: flex;
     gap: 4px;
-    // The glyphs, not their 32 px hit areas, line up with the content's edge
-    margin-right: -8px;
+    // The glyphs, not their hit areas, line up with the content's edge
+    margin-right: var(--icon-link-inset);
 
     a {
       color: var(--secondary);
+    }
+  }
+
+  @media (max-width: 640px) {
+    .wrapper {
+      padding: 0 16px;
     }
   }
 }

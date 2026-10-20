@@ -16,6 +16,8 @@ data class EpisodeDto(
     val status: EpisodeStatus,
     val sessionId: UUID?,
     val show: String?,
+    val recommendedById: UUID?,
+    val recommendedBy: String?,
     val recordingDate: LocalDate?,
     val airedDate: LocalDate?,
     val addedDate: LocalDate,
@@ -23,9 +25,10 @@ data class EpisodeDto(
     val spotifyUrl: String?,
     val applePodcastsUrl: String?,
     val patreonUrl: String?,
+    val tinySummary: String?,
 )
 
-// What get_episode returns; summaries are long, so lists of episodes leave them out
+// What get_episode returns; the summary and the AI summary are long, so lists of episodes have only the tiny one
 data class EpisodeDetailsDto(
     val id: UUID?,
     val code: String?,
@@ -35,6 +38,8 @@ data class EpisodeDetailsDto(
     val status: EpisodeStatus,
     val sessionId: UUID?,
     val show: String?,
+    val recommendedById: UUID?,
+    val recommendedBy: String?,
     val recordingDate: LocalDate?,
     val airedDate: LocalDate?,
     val addedDate: LocalDate,
@@ -43,22 +48,25 @@ data class EpisodeDetailsDto(
     val applePodcastsUrl: String?,
     val patreonUrl: String?,
     val summary: String?,
+    val tinySummary: String?,
     val machineSummary: String?,
 )
 data class EpisodePersonDto(val personId: UUID?, val name: String, val email: String?, val roles: List<Role>)
 
 fun Episode.toDto() = EpisodeDto(
     id = id, code = code, title = title, status = status, sessionId = session?.id, show = show?.name,
+    recommendedById = recommendedBy?.id, recommendedBy = recommendedBy?.name,
     recordingDate = recordingDate, airedDate = airedDate, addedDate = addedDate,
     youtubeUrl = youtubeUrl, spotifyUrl = spotifyUrl, applePodcastsUrl = applePodcastsUrl, patreonUrl = patreonUrl,
+    tinySummary = tinySummary,
 )
 
 private fun Episode.toDetailsDto() = EpisodeDetailsDto(
     id = id, code = code, title = title, titleB = titleB, titleC = titleC, status = status, sessionId = session?.id,
-    show = show?.name,
+    show = show?.name, recommendedById = recommendedBy?.id, recommendedBy = recommendedBy?.name,
     recordingDate = recordingDate, airedDate = airedDate, addedDate = addedDate,
     youtubeUrl = youtubeUrl, spotifyUrl = spotifyUrl, applePodcastsUrl = applePodcastsUrl, patreonUrl = patreonUrl,
-    summary = summary, machineSummary = machineSummary,
+    summary = summary, tinySummary = tinySummary, machineSummary = machineSummary,
 )
 
 // For messages: ideas may not have a code yet
@@ -85,8 +93,9 @@ class EpisodesMCP(
 
     @McpTool(
         name = "list_episodes",
-        description = "List episodes, latest season and episode first and ideas without a code last, optionally only " +
-            "those with a given status. Summaries are left out; get_episode has them"
+        description = "List episodes, latest season and episode first, then the bonus season ($BONUS_SEASON) and ideas " +
+            "without a code last, optionally only those with a given status. Of the summaries only the tiny one is " +
+            "there; get_episode has them all"
     )
     fun list(
         @McpToolParam(description = "Only list episodes with this status", required = false) status: EpisodeStatus? = null,
@@ -97,15 +106,41 @@ class EpisodesMCP(
     fun get(@McpToolParam(description = EPISODE_REF) code: String): EpisodeDetailsDto? =
         episodes.findByRef(code)?.toDetailsDto()
 
+    private fun findPerson(id: UUID) = requireNotNull(people.findByIdOrNull(id)) { "Person $id not found" }
+
     @Transactional
     @McpTool(
         name = "create_episode",
-        description = "Create a new episode. It starts as an IDEA, which can do without a code until it is planned"
+        description = "Create a new episode. It starts as an IDEA, which can do without a code until it is planned. " +
+            "It's recommended by the person linked to you, unless you name someone else"
     )
     fun create(
         @McpToolParam(description = "Unique episode code, e.g. S05E08", required = false) code: String?,
         @McpToolParam(description = "Episode title") title: String,
-    ): EpisodeDto = episodes.save(Episode(title = title, code = code?.trim()?.ifEmpty { null })).toDto()
+        @McpToolParam(
+            description = "ID of the person who recommended it; omit for the person linked to you by email, if there is one",
+            required = false,
+        )
+        recommendedBy: UUID? = null,
+    ): EpisodeDto {
+        val episode = Episode(title = title, code = code?.trim()?.ifEmpty { null })
+        episode.recommendedBy = recommendedBy?.let(::findPerson) ?: people.findSignedIn()
+        return episodes.save(episode).toDto()
+    }
+
+    @Transactional
+    @McpTool(
+        name = "set_episode_recommended_by",
+        description = "Set who recommended an episode, e.g. someone else than who added it, or clear it"
+    )
+    fun setRecommendedBy(
+        @McpToolParam(description = EPISODE_REF) code: String,
+        @McpToolParam(description = "Person ID; omit to clear", required = false) personId: UUID?,
+    ): EpisodeDto {
+        val episode = findEpisode(code)
+        episode.recommendedBy = personId?.let(::findPerson)
+        return episode.toDto()
+    }
 
     @Transactional
     @McpTool(
@@ -123,6 +158,8 @@ class EpisodesMCP(
         titleC: String? = null,
         @McpToolParam(description = "Description of the episode, in Markdown; empty to clear", required = false)
         summary: String? = null,
+        @McpToolParam(description = "Very short summary of the episode, e.g. a sentence, in Markdown; empty to clear", required = false)
+        tinySummary: String? = null,
         @McpToolParam(description = "AI-generated summary of the episode, in Markdown; empty to clear", required = false)
         machineSummary: String? = null,
         @McpToolParam(description = "When the episode is or was recorded, e.g. 2026-10-19", required = false)
@@ -145,6 +182,7 @@ class EpisodesMCP(
         titleB?.let { episode.titleB = it.trim().ifEmpty { null } }
         titleC?.let { episode.titleC = it.trim().ifEmpty { null } }
         summary?.let { episode.summary = it.trim().ifEmpty { null } }
+        tinySummary?.let { episode.tinySummary = it.trim().ifEmpty { null } }
         machineSummary?.let { episode.machineSummary = it.trim().ifEmpty { null } }
         recordingDate?.let { episode.recordingDate = it }
         airedDate?.let { episode.airedDate = it }
@@ -247,7 +285,8 @@ class EpisodesMCP(
     fun assignPerson(
         @McpToolParam(description = EPISODE_REF) code: String,
         @McpToolParam(description = "Person ID") personId: UUID,
-        @McpToolParam(description = "Role on the episode") role: Role,
+        @McpToolParam(description = "Role on the episode; CANDIDATE for someone who could be its guest, until confirm_guest makes them one")
+        role: Role,
     ): EpisodePersonDto {
         val episode = findEpisode(code)
         val person = requireNotNull(people.findByIdOrNull(personId)) { "Person $personId not found" }
@@ -278,6 +317,27 @@ class EpisodesMCP(
         }
         episodePeople.deleteAll(removed)
         return person.onEpisode(remaining)
+    }
+
+    @Transactional
+    @McpTool(
+        name = "confirm_guest",
+        description = "Make a candidate a guest: a person who is a CANDIDATE on an episode, someone who could be its " +
+            "guest, becomes its GUEST, e.g. once they've said yes. Returns all of their roles on it"
+    )
+    fun confirmGuest(
+        @McpToolParam(description = EPISODE_REF) code: String,
+        @McpToolParam(description = "Person ID") personId: UUID,
+    ): EpisodePersonDto {
+        val episode = findEpisode(code)
+        val person = requireNotNull(people.findByIdOrNull(personId)) { "Person $personId not found" }
+        val candidate = requireNotNull(episodePeople.findByEpisodeAndPersonAndRole(episode, person, Role.CANDIDATE)) {
+            "${person.name} is not a candidate on episode ${episode.label}"
+        }
+        // The candidacy becomes the guest role, so the history has it as one change; for a guest already, it just goes
+        if (episodePeople.findByEpisodeAndPersonAndRole(episode, person, Role.GUEST) == null) candidate.role = Role.GUEST
+        else episodePeople.delete(candidate)
+        return person.onEpisode(episodePeople.findByEpisodeAndPerson(episode, person))
     }
 
     @McpResource(uri = "episode://{code}", name = "Episode", description = "Episode by code or ID")

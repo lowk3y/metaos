@@ -12,6 +12,14 @@
   gap: 56px;
 }
 
+// Phones: a narrower gutter, as the header's, and less space around and between sections
+@media (max-width: 640px) {
+  .content {
+    padding: 32px 16px 64px;
+    gap: 48px;
+  }
+}
+
 .episodes {
   padding: 0;
   list-style: none;
@@ -44,16 +52,6 @@
     font-family: var(--font-mono);
   }
 
-  .status {
-    padding: 2px 8px;
-    font-size: 12px;
-    line-height: 16px;
-    font-weight: 500;
-    color: var(--secondary);
-    border: 1px solid var(--hairline);
-    border-radius: 999px;
-  }
-
   .subtitle {
     color: var(--secondary);
   }
@@ -84,7 +82,7 @@
   .icons {
     display: flex;
     flex-wrap: wrap;
-    margin: -5px 0 -5px -8px;
+    margin: calc((22px - var(--icon-link)) / 2) 0 calc((22px - var(--icon-link)) / 2) var(--icon-link-inset);
   }
 }
 

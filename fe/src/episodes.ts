@@ -1,6 +1,7 @@
 // Episodes as MetaOS's GraphQL API has them (src/main/resources/graphql/schema.graphqls)
 
-export type Role = 'HOST' | 'CO_HOST' | 'GUEST' | 'PRODUCER' | 'CONSULTANT' | 'DESIGNER'
+// A candidate could be the episode's guest, until they're confirmed as one; only signed-in users get them
+export type Role = 'HOST' | 'CO_HOST' | 'GUEST' | 'PRODUCER' | 'CONSULTANT' | 'DESIGNER' | 'CANDIDATE'
 
 export type EpisodeStatus =
   | 'IDEA'
@@ -50,6 +51,8 @@ export interface Episode {
   spotifyUrl: string | null
   applePodcastsUrl: string | null
   patreonUrl: string | null
+  // Markdown, e.g. a sentence
+  tinySummary: string | null
   people: EpisodePerson[]
   documents: GoogleDoc[]
   koofrFolders: KoofrFolderLink[]
@@ -121,6 +124,17 @@ export interface Change {
   fields: FieldChange[]
 }
 
+/** A person, as an episode names who recommended it */
+export interface PersonName {
+  name: string
+}
+
+/** An episode idea, as the Ideas page lists them: with when it was added, as they're listed the newest first */
+export interface Idea extends Episode {
+  addedDate: string
+  recommendedBy: PersonName | null
+}
+
 /** An episode with everything about it, for its page */
 export interface EpisodeDetails extends Episode {
   // What the title is A/B tested against
@@ -129,6 +143,7 @@ export interface EpisodeDetails extends Episode {
   summary: string | null
   machineSummary: string | null
   addedDate: string
+  recommendedBy: PersonName | null
   koofrFolders: KoofrFolder[]
   dropboxFolders: DropboxFolderWithPictures[]
   history: Change[]
@@ -172,6 +187,7 @@ export function sessionPath(session: Pick<Session, 'id'>) {
 /** The fields of an Episode, for a query */
 export const EPISODE_FIELDS = `
   id code title show showColor status recordingDate airedDate youtubeUrl spotifyUrl applePodcastsUrl patreonUrl
+  tinySummary
   session { id date location documents { fileId url } koofrFolders { path url } dropboxFolders { path url } }
   people { personId name roles }
   documents { fileId url }
@@ -188,7 +204,7 @@ const platforms = {
 
 export type Platform = keyof typeof platforms
 
-export function links(episode: Episode) {
+export function links(episode: Pick<Episode, (typeof platforms)[Platform]>) {
   return (Object.keys(platforms) as Platform[]).flatMap((platform) => {
     const url = episode[platforms[platform]]
     return url ? [{ platform, url }] : []
@@ -200,9 +216,23 @@ export function roleName(role: Role) {
   return role.toLowerCase().replace('_', '-')
 }
 
-// IN_PRODUCTION -> in production
+// IN_PRODUCTION -> In production
 export function statusName(status: EpisodeStatus) {
-  return status.toLowerCase().replace('_', ' ')
+  return status.charAt(0) + status.slice(1).toLowerCase().replace('_', ' ')
+}
+
+function named(episode: Pick<Episode, 'people'>, role: Role) {
+  return episode.people.filter((person) => person.roles.includes(role)).map((person) => person.name)
+}
+
+/** The names of an episode's guests, whom a list of episodes names instead of everyone on it */
+export function guests(episode: Pick<Episode, 'people'>) {
+  return named(episode, 'GUEST')
+}
+
+/** The names of those who could be an episode's guests, e.g. an idea's */
+export function candidates(episode: Pick<Episode, 'people'>) {
+  return named(episode, 'CANDIDATE')
 }
 
 export function formatDate(date: string) {

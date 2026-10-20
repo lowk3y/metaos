@@ -44,6 +44,7 @@ private fun List<EpisodePerson>.toPersonEpisodeDtos(): List<PersonEpisodeDto> =
 class PeopleMCP(
     private val people: PeopleRepository,
     private val episodePeople: EpisodePeopleRepository,
+    private val episodes: EpisodesRepository,
 ) {
 
     @McpTool(name = "list_people", description = "List all people")
@@ -103,18 +104,31 @@ class PeopleMCP(
     }
 
     @Transactional
-    @McpTool(name = "delete_person", description = "Soft-delete a person. They drop off their episodes until they are restored")
+    @McpTool(
+        name = "delete_person",
+        description = "Soft-delete a person. They drop off their episodes, and the episodes they recommended, until " +
+            "they are restored"
+    )
     fun delete(@McpToolParam(description = "Person ID") personId: UUID): PersonDto? =
-        people.findByIdOrNull(personId)?.also { people.delete(it) }?.toDto()
+        people.findByIdOrNull(personId)?.also { person ->
+            // In the same transaction, so restoring them finds these in the audit log (reattachToRecommender)
+            episodes.findByRecommendedBy(person).forEach { it.recommendedBy = null }
+            people.delete(person)
+        }?.toDto()
 
     @Transactional
-    @McpTool(name = "restore_person", description = "Bring back a soft-deleted person, with their roles on episodes")
+    @McpTool(
+        name = "restore_person",
+        description = "Bring back a soft-deleted person, with their roles on episodes and the episodes they recommended " +
+            "(unless someone else has been credited with one since)"
+    )
     fun restore(@McpToolParam(description = "Person ID") personId: UUID): PersonDto {
         require(people.isDeleted(personId)) { "There is no deleted person $personId" }
         people.findDeletedEmail(personId)?.let { email ->
             require(people.findByEmail(email) == null) { "Person with email $email already exists" }
         }
         people.restore(personId)
+        episodes.reattachToRecommender(personId)
         return requireNotNull(people.findByIdOrNull(personId)).toDto()
     }
 

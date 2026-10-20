@@ -9,11 +9,17 @@ const router = createRouter({
       name: 'home',
       component: HomeView,
     },
-    // Every episode by season; for anyone not signed in, the released ones
+    // Every episode by season, but the ideas; for anyone not signed in, the released ones
     {
       path: '/episodes',
       name: 'episodes',
       component: () => import('../views/EpisodesView.vue'),
+    },
+    // The episode ideas, behind sign-in
+    {
+      path: '/ideas',
+      name: 'ideas',
+      component: () => import('../views/IdeasView.vue'),
     },
     // An episode's and a session's page, behind sign-in; an episode by its code, or its ID while it has none
     {

@@ -88,10 +88,12 @@ class AuditLog(
                    and ((old_row ->> 'session_id' is distinct from new_row ->> 'session_id'
                          and ? in (old_row ->> 'session_id', new_row ->> 'session_id'))
                      or (old_row ->> 'show_id' is distinct from new_row ->> 'show_id'
-                         and ? in (old_row ->> 'show_id', new_row ->> 'show_id'))))
+                         and ? in (old_row ->> 'show_id', new_row ->> 'show_id'))
+                     or (old_row ->> 'recommended_by' is distinct from new_row ->> 'recommended_by'
+                         and ? in (old_row ->> 'recommended_by', new_row ->> 'recommended_by'))))
             order by id
             """.trimIndent(),
-            toRow, id, id.toString(), id.toString(), id.toString(), id.toString(),
+            toRow, id, id.toString(), id.toString(), id.toString(), id.toString(), id.toString(),
         )
 
     fun recent(limit: Int): List<AuditRow> =
@@ -105,8 +107,8 @@ class AuditMCP(private val auditLog: AuditLog) {
         name = "get_history",
         description = "List every change to an episode, person, session or show, oldest first: what changed, when, " +
             "by whom, through which MCP client and tool. Includes people's roles on an episode, the documents, Koofr " +
-            "and Dropbox folders linked to an episode or session and episodes moving in and out of a session or show. Soft " +
-            "deletes show up as updates that set deleted_at"
+            "and Dropbox folders linked to an episode or session, episodes moving in and out of a session or show and " +
+            "the episodes a person is credited with recommending. Soft deletes show up as updates that set deleted_at"
     )
     fun history(@McpToolParam(description = "ID of the episode, person, session or show") id: UUID): List<ChangeDto> =
         auditLog.history(id).map { it.toDto() }

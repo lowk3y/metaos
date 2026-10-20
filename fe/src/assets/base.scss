@@ -16,6 +16,17 @@
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   --content-width: 880px;
+
+  // An icon link's hit area, bigger for fingers, and how far it reaches past its 16 px glyph on each side: a negative
+  // margin of that lines the glyph, not the hit area, up with the text
+  --icon-link: 32px;
+  --icon-link-inset: calc((16px - var(--icon-link)) / 2);
+}
+
+@media (pointer: coarse) {
+  :root {
+    --icon-link: 40px;
+  }
 }
 
 // No margins by default: spacing is set where it's wanted
@@ -75,16 +86,25 @@ button {
   }
 }
 
-// A link that's only an icon: a 16 px glyph in a 32 × 32 px area, easy to hit
+// A link that's only an icon: a 16 px glyph in a 32 × 32 px area (40 × 40 for fingers), easy to hit
 .icon-link {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: var(--icon-link);
+  height: var(--icon-link);
   border-radius: 8px;
 
   &:hover {
     background: var(--hover);
+  }
+}
+
+// A link to another service, grey so a list of them stays quiet, and in the service's colour (--brand) when pointed at
+.brand-link {
+  color: var(--muted);
+
+  &:hover {
+    color: var(--brand);
   }
 }

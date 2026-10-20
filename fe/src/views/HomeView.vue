@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
-import DocLinks from '@/components/DocLinks.vue'
-import DropboxLinks from '@/components/DropboxLinks.vue'
-import KoofrLinks from '@/components/KoofrLinks.vue'
 import EpisodeItem from '@/components/EpisodeItem.vue'
+import EpisodeRow from '@/components/EpisodeRow.vue'
+import FileLinks from '@/components/FileLinks.vue'
 import SignInPrompt from '@/components/SignInPrompt.vue'
 import { bySession, type Episode, EPISODE_FIELDS, formatDate, sessionPath, type SessionGroup } from '@/episodes'
 import { errorMessage, graphql } from '@/graphql'
@@ -93,10 +92,11 @@ watch(() => auth.authenticated, (authenticated) => {
       <p v-if="releasedError" class="note">The episodes didn't load: {{ releasedError }}</p>
       <p v-else-if="!released" class="note">Loading…</p>
       <ul v-else class="episodes">
-        <EpisodeItem v-for="episode in released" :key="episode.id" :episode="episode" released/>
+        <EpisodeItem v-for="episode in released" :key="episode.id" :episode="episode"/>
       </ul>
     </section>
 
+    <!-- What's being made, a line an episode, as the Episodes page lists what's in the works -->
     <template v-if="auth.authenticated">
       <p v-if="makingError" class="note">The upcoming recordings and what's in production didn't load: {{ makingError }}</p>
       <section v-for="section in sections" v-else :key="section.id" :aria-labelledby="section.id">
@@ -105,20 +105,18 @@ watch(() => auth.authenticated, (authenticated) => {
           <span class="count">{{ section.count }}</span>
         </div>
         <!-- Episodes without a session are listed as they are, without a heading -->
-        <div v-for="group in section.groups" :key="group.key" class="group">
-          <h3 v-if="group.session" class="session">
+        <template v-for="group in section.groups" :key="group.key">
+          <h3 v-if="group.session" class="subheading session">
             <RouterLink :to="sessionPath(group.session)">
               <time :datetime="group.session.date">{{ formatDate(group.session.date) }}</time>
               <span v-if="group.session.location" class="location">{{ group.session.location }}</span>
             </RouterLink>
-            <DocLinks :documents="group.session.documents"/>
-            <KoofrLinks :folders="group.session.koofrFolders"/>
-            <DropboxLinks :folders="group.session.dropboxFolders"/>
+            <span class="files"><FileLinks :of="group.session"/></span>
           </h3>
           <ul class="episodes">
-            <EpisodeItem v-for="episode in group.episodes" :key="episode.id" :episode="episode"/>
+            <EpisodeRow v-for="episode in group.episodes" :key="episode.id" :episode="episode" under-session/>
           </ul>
-        </div>
+        </template>
       </section>
     </template>
   </main>
@@ -127,30 +125,22 @@ watch(() => auth.authenticated, (authenticated) => {
 <style scoped lang="scss">
 @use '../assets/page';
 
+// The date, then where, which on phones goes on a line of its own when it doesn't fit
 .session {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 32px;
-  padding: 20px 0 8px;
-  font-size: 13px;
-  line-height: 20px;
-  font-weight: 600;
-
   a {
     display: flex;
-    gap: 8px;
+    flex-wrap: wrap;
+    column-gap: 8px;
   }
 
   .location {
     font-weight: 400;
     color: var(--secondary);
   }
-}
 
-// Right under the section's heading, the heading's own space is enough
-.heading + .group .session {
-  padding-top: 8px;
+  .files {
+    display: flex;
+  }
 }
 
 </style>

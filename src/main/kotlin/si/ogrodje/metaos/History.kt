@@ -26,9 +26,10 @@ private val DATE = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.UK)
 // The columns people care about, in the order they're shown, by their names
 private val EPISODE_COLUMNS = linkedMapOf(
     "code" to "Code", "title" to "Title", "title_b" to "Title B", "title_c" to "Title C", "status" to "Status",
-    "show_id" to "Show", "session_id" to "Session", "recording_date" to "Recording date", "aired_date" to "Aired", "added_date" to "Added",
+    "show_id" to "Show", "session_id" to "Session", "recommended_by" to "Recommended by",
+    "recording_date" to "Recording date", "aired_date" to "Aired", "added_date" to "Added",
     "youtube_url" to "YouTube", "spotify_url" to "Spotify", "apple_podcasts_url" to "Apple Podcasts",
-    "patreon_url" to "Patreon", "summary" to "Summary", "machine_summary" to "AI summary",
+    "patreon_url" to "Patreon", "summary" to "Summary", "tiny_summary" to "Tiny summary", "machine_summary" to "AI summary",
 )
 private val SESSION_COLUMNS = linkedMapOf("date" to "Date", "location" to "Location", "address" to "Address")
 
@@ -46,7 +47,7 @@ class History(private val auditLog: AuditLog, private val jdbcTemplate: JdbcTemp
     fun of(id: UUID): List<HistoryEntryDto> {
         val rows = auditLog.history(id)
         val names = Names(
-            people = names("select id, name from people", rows.ids("person_id")),
+            people = names("select id, name from people", rows.ids("person_id") + rows.ids("recommended_by")),
             shows = names("select id, name from shows", rows.ids("show_id")),
             sessions = names("select id, date, location from sessions", rows.ids("session_id")) { rs ->
                 listOfNotNull(DATE.format(rs.getObject("date", LocalDate::class.java)), rs.getString("location")).joinToString(" · ")
@@ -111,6 +112,7 @@ private class Names(val people: Map<String, String>, val shows: Map<String, Stri
         column == "status" -> value.toString().lowercase().replace('_', ' ')
         column == "show_id" -> shows[value.toString()] ?: "a show deleted since"
         column == "session_id" -> sessions[value.toString()] ?: "a session deleted since"
+        column == "recommended_by" -> people[value.toString()] ?: "someone deleted since"
         column in DATE_COLUMNS -> runCatching { DATE.format(LocalDate.parse(value.toString())) }.getOrDefault(value.toString())
         else -> value.toString()
     }

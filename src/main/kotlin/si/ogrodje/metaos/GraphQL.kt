@@ -58,10 +58,15 @@ class EpisodesGraphQL(private val episodes: EpisodesRepository, private val epis
             listOf(EpisodeStatus.RECORDED, EpisodeStatus.IN_PRODUCTION, EpisodeStatus.READY, EpisodeStatus.EARLY_ACCESS)
         ).sortedWith(byRecordingDate)
 
-    // What's released is public; the rest is for signed-in users
+    // What's released is public; the rest is for signed-in users, but for the ideas, which are listed on their own
     @QueryMapping("episodes")
     fun allEpisodes(): List<Episode> =
-        if (signedIn()) episodes.findLatestFirst() else episodes.findLatestFirstByStatus(EpisodeStatus.PUBLISHED)
+        if (signedIn()) episodes.findLatestFirstByStatusNot(EpisodeStatus.IDEA)
+        else episodes.findLatestFirstByStatus(EpisodeStatus.PUBLISHED)
+
+    @QueryMapping
+    @PreAuthorize(SIGNED_IN)
+    fun ideas(): List<Episode> = episodes.findByStatusOrderByAddedDateDescTitleAsc(EpisodeStatus.IDEA)
 
     @SchemaMapping(typeName = "Episode")
     fun show(episode: Episode): String? = episode.show?.name
@@ -69,10 +74,13 @@ class EpisodesGraphQL(private val episodes: EpisodesRepository, private val epis
     @SchemaMapping(typeName = "Episode")
     fun showColor(episode: Episode): String? = episode.show?.color
 
-    // The people of all the episodes in an answer, in one query
+    // The people of all the episodes in an answer, in one query. Candidates, who aren't guests yet, are the team's.
     @BatchMapping(typeName = "Episode")
     fun people(episodes: List<Episode>): Map<Episode, List<EpisodePersonDto>> {
-        val byEpisode = episodePeople.findByEpisodesWithPerson(episodes).groupBy { it.episode }
+        val signedIn = signedIn()
+        val byEpisode = episodePeople.findByEpisodesWithPerson(episodes)
+            .filter { signedIn || it.role != Role.CANDIDATE }
+            .groupBy { it.episode }
         return episodes.associateWith { byEpisode[it].orEmpty().toEpisodePersonDtos() }
     }
 }
@@ -149,6 +157,10 @@ class DetailsGraphQL(
 
     @SchemaMapping(typeName = "Episode")
     fun titleC(episode: Episode): String? = episode.titleC.takeIf { signedIn() }
+
+    // Who recommended an episode is the team's too
+    @SchemaMapping(typeName = "Episode")
+    fun recommendedBy(episode: Episode): Person? = episode.recommendedBy.takeIf { signedIn() }
 
     @SchemaMapping(typeName = "Episode", field = "history")
     fun episodeHistory(episode: Episode): List<HistoryEntryDto> =

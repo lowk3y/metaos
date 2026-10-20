@@ -1,19 +1,19 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
 import DocLinks from '@/components/DocLinks.vue'
 import DropboxFolderList from '@/components/DropboxFolderList.vue'
 import HistoryTimeline from '@/components/HistoryTimeline.vue'
 import KoofrFolderList from '@/components/KoofrFolderList.vue'
+import ListenLinks from '@/components/ListenLinks.vue'
 import MarkdownText from '@/components/MarkdownText.vue'
 import PhotoStrip from '@/components/PhotoStrip.vue'
 import ShowBadge from '@/components/ShowBadge.vue'
 import SignInPrompt from '@/components/SignInPrompt.vue'
-import { brands } from '@/brands'
+import StatusLabel from '@/components/StatusLabel.vue'
 import {
   ARTWORK_FIELDS, artworkOf, DROPBOX_FIELDS, EPISODE_FIELDS, type EpisodeDetails, formatDate, HISTORY_FIELDS, KOOFR_FIELDS,
-  links, photosOf, roleName, sessionPath, sessionTitle, statusName,
+  links, photosOf, roleName, sessionPath, sessionTitle,
 } from '@/episodes'
 import { errorMessage, graphql } from '@/graphql'
 import { useAuthStore } from '@/stores/auth'
@@ -37,7 +37,7 @@ watch([() => route.params.ref, () => auth.authenticated], async ([episodeRef, au
   try {
     const data = await graphql<{ episode: EpisodeDetails | null }>(`query ($ref: String!) {
       episode(ref: $ref) {
-        ${EPISODE_FIELDS} titleB titleC summary machineSummary addedDate ${KOOFR_FIELDS} ${DROPBOX_FIELDS} ${ARTWORK_FIELDS}
+        ${EPISODE_FIELDS} titleB titleC summary machineSummary addedDate recommendedBy { name } ${KOOFR_FIELDS} ${DROPBOX_FIELDS} ${ARTWORK_FIELDS}
         ${HISTORY_FIELDS}
       }
     }`, { ref: String(episodeRef) })
@@ -67,9 +67,10 @@ const photos = computed(() => (episode.value ? photosOf(episode.value.koofrFolde
         <p class="kicker">
           <span v-if="episode.code" class="code">{{ episode.code }}</span>
           <ShowBadge v-if="episode.show" :name="episode.show" :color="episode.showColor"/>
-          <span class="status">{{ statusName(episode.status) }}</span>
+          <StatusLabel :status="episode.status"/>
         </p>
         <h1 lang="sl">{{ episode.title }}</h1>
+        <MarkdownText v-if="episode.tinySummary" :source="episode.tinySummary" lang="sl"/>
       </header>
 
       <section aria-labelledby="details">
@@ -100,14 +101,13 @@ const photos = computed(() => (episode.value ? photosOf(episode.value.koofrFolde
             <dt>Added</dt>
             <dd><time :datetime="episode.addedDate">{{ formatDate(episode.addedDate) }}</time></dd>
           </div>
+          <div v-if="episode.recommendedBy">
+            <dt>Recommended by</dt>
+            <dd>{{ episode.recommendedBy.name }}</dd>
+          </div>
           <div v-if="links(episode).length">
             <dt>Listen</dt>
-            <dd class="icons">
-              <a v-for="link in links(episode)" :key="link.platform" class="icon-link" :href="link.url"
-                 :title="link.platform" :aria-label="link.platform" :style="{ color: brands[link.platform].color }">
-                <FontAwesomeIcon :icon="brands[link.platform].icon"/>
-              </a>
-            </dd>
+            <dd class="icons"><ListenLinks :episode="episode"/></dd>
           </div>
           <div v-if="episode.documents.length">
             <dt>Docs</dt>

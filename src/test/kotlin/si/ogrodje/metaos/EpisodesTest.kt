@@ -7,6 +7,10 @@ import org.springframework.context.annotation.Import
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.core.queryForObject
+import org.springframework.security.core.context.SecurityContextHolder
+import org.springframework.security.oauth2.jwt.Jwt
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
+import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
@@ -20,6 +24,7 @@ class EpisodesTest @Autowired constructor(
     private val episodesMCP: EpisodesMCP,
     private val peopleMCP: PeopleMCP,
     private val jdbcTemplate: JdbcTemplate,
+    private val history: History,
 ) {
 
     @Test
@@ -139,15 +144,24 @@ class EpisodesTest @Autowired constructor(
     }
 
     @Test
-    fun `sets and clears summaries, which only get_episode returns`() {
+    fun `sets and clears summaries, of which lists have only the tiny one`() {
         episodesRepository.saveAndFlush(Episode(title = "Summarized", code = "ep-1701"))
 
-        val updated = episodesMCP.update("ep-1701", newCode = null, title = null, summary = " **Bold** intro ", machineSummary = "AI text")
-        assertEquals(Triple("Summarized", "**Bold** intro", "AI text"), Triple(updated.title, updated.summary, updated.machineSummary))
+        val updated = episodesMCP.update(
+            "ep-1701", newCode = null, title = null, summary = " **Bold** intro ", tinySummary = " In *short* ", machineSummary = "AI text",
+        )
+        assertEquals(
+            listOf("Summarized", "**Bold** intro", "In *short*", "AI text"),
+            listOf(updated.title, updated.summary, updated.tinySummary, updated.machineSummary),
+        )
 
-        episodesMCP.update("ep-1701", newCode = null, title = null, summary = "", machineSummary = null)
+        episodesMCP.update("ep-1701", newCode = null, title = null, summary = "", tinySummary = null, machineSummary = null)
         val episode = assertNotNull(episodesMCP.get("ep-1701"))
-        assertEquals(null to "AI text", episode.summary to episode.machineSummary)
+        assertEquals(listOf(null, "In *short*", "AI text"), listOf(episode.summary, episode.tinySummary, episode.machineSummary))
+        assertEquals("In *short*", episodesMCP.list().single { it.code == "ep-1701" }.tinySummary)
+
+        episodesMCP.update("ep-1701", newCode = null, title = null, tinySummary = " ")
+        assertNull(assertNotNull(episodesMCP.get("ep-1701")).tinySummary)
     }
 
     @Test
@@ -160,12 +174,87 @@ class EpisodesTest @Autowired constructor(
         assertFailsWith<IllegalArgumentException> { episodesMCP.setLink("ep-1202", Platform.PATREON, "https://patreon.example.com/x") }
     }
 
+    // Signed in with a verified email, as through an MCP client
+    private fun <T> signedInAs(email: String, block: () -> T): T {
+        val jwt = Jwt.withTokenValue("token").header("alg", "none").subject("user-$email")
+            .claim("email", email).claim("email_verified", true).build()
+        SecurityContextHolder.getContext().authentication = JwtAuthenticationToken(jwt)
+        return try { block() } finally { SecurityContextHolder.clearContext() }
+    }
+
     @Test
-    fun `lists the latest season and episode first`() {
-        listOf("S91E02", "S92E01", "S91E10").forEach { episodesMCP.create(code = it, title = it) }
+    fun `credits whoever adds an episode with recommending it, unless they name someone else`() {
+        val adder = peopleMCP.create(name = "Adding Recommender", email = "adding.recommender@example.com")
+        val other = peopleMCP.create(name = "Named Recommender", email = null)
+
+        val mine = signedInAs("adding.recommender@example.com") { episodesMCP.create(code = "ep-2101", title = "Mine") }
+        assertEquals(adder.id to "Adding Recommender", mine.recommendedById to mine.recommendedBy)
+        val theirs = signedInAs("adding.recommender@example.com") {
+            episodesMCP.create(code = "ep-2102", title = "Theirs", recommendedBy = other.id)
+        }
+        assertEquals(other.id, theirs.recommendedById)
+        // Nobody signed in, or nobody linked to them
+        assertNull(episodesMCP.create(code = "ep-2103", title = "Nobody's").recommendedById)
+        assertNull(signedInAs("unknown@example.com") { episodesMCP.create(code = "ep-2104", title = "A stranger's") }.recommendedById)
+
+        assertEquals(adder.id, episodesMCP.setRecommendedBy("ep-2102", adder.id).recommendedById)
+        assertNull(episodesMCP.setRecommendedBy("ep-2102", null).recommendedById)
+        assertFailsWith<IllegalArgumentException> { episodesMCP.setRecommendedBy("ep-2102", UUID.randomUUID()) }
+        assertEquals(
+            listOf(FieldChangeDto("Recommended by", "Named Recommender", "Adding Recommender"), FieldChangeDto("Recommended by", "Adding Recommender", null)),
+            history.of(theirs.id!!).takeLast(2).map { it.fields.single() },
+        )
+    }
+
+    @Test
+    fun `takes a deleted person off the episodes they recommended, and restoring them puts them back`() {
+        val person = peopleMCP.create(name = "Deleted Recommender", email = null)
+        episodesMCP.create(code = "ep-2201", title = "Recommended", recommendedBy = person.id)
+        episodesMCP.create(code = "ep-2202", title = "Recommended, then credited to someone else", recommendedBy = person.id)
+
+        peopleMCP.delete(person.id!!)
+        assertNull(assertNotNull(episodesMCP.get("ep-2201")).recommendedById)
+        val other = peopleMCP.create(name = "Credited Since", email = null)
+        episodesMCP.setRecommendedBy("ep-2202", other.id)
+
+        peopleMCP.restore(person.id!!)
+        assertEquals(person.id, assertNotNull(episodesMCP.get("ep-2201")).recommendedById)
+        assertEquals(other.id, assertNotNull(episodesMCP.get("ep-2202")).recommendedById)
+    }
+
+    @Test
+    fun `makes a candidate a guest in one change, and lists candidates last`() {
+        val episode = episodesRepository.saveAndFlush(Episode(title = "Pitched", code = "ep-2001"))
+        val host = peopleMCP.create(name = "Pitch Host", email = null)
+        val maybe = peopleMCP.create(name = "Maybe Guest", email = null)
+        val another = peopleMCP.create(name = "Another Candidate", email = null)
+        episodesMCP.assignPerson("ep-2001", maybe.id!!, Role.CANDIDATE)
+        episodesMCP.assignPerson("ep-2001", another.id!!, Role.CANDIDATE)
+        episodesMCP.assignPerson("ep-2001", another.id!!, Role.GUEST)
+        episodesMCP.assignPerson("ep-2001", host.id!!, Role.HOST)
+
+        assertEquals(listOf(Role.GUEST), episodesMCP.confirmGuest("ep-2001", maybe.id!!).roles)
+        assertEquals(
+            Triple("Changed Maybe Guest's role", "candidate", "guest"),
+            history.of(episode.id!!).last().let { Triple(it.summary, it.fields.single().from, it.fields.single().to) },
+        )
+        // Already a guest, they're just no longer a candidate
+        assertEquals(listOf(Role.GUEST), episodesMCP.confirmGuest("ep-2001", another.id!!).roles)
+        assertFailsWith<IllegalArgumentException> { episodesMCP.confirmGuest("ep-2001", maybe.id!!) }
+
+        episodesMCP.assignPerson("ep-2001", host.id!!, Role.CANDIDATE)
+        assertEquals(
+            listOf("Pitch Host" to listOf(Role.HOST, Role.CANDIDATE), "Another Candidate" to listOf(Role.GUEST), "Maybe Guest" to listOf(Role.GUEST)),
+            episodesMCP.listPeople("ep-2001").map { it.name to it.roles },
+        )
+    }
+
+    @Test
+    fun `lists the latest season and episode first, and the bonus season after them`() {
+        listOf("S91E02", "S99E01", "S92E01", "S91E10").forEach { episodesMCP.create(code = it, title = it) }
 
         assertEquals(
-            listOf("S92E01", "S91E10", "S91E02"),
+            listOf("S92E01", "S91E10", "S91E02", "S99E01"),
             episodesMCP.list().mapNotNull { it.code }.filter { it.startsWith("S9") },
         )
     }

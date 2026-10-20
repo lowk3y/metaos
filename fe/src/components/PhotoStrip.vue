@@ -134,7 +134,7 @@ onBeforeUnmount(release)
   align-items: center;
   gap: 4px;
   align-self: center;
-  margin: -4px 0 -4px auto;
+  margin: calc((24px - var(--icon-link)) / 2) 0 calc((24px - var(--icon-link)) / 2) auto;
 
   .count {
     margin-right: 8px;
@@ -145,8 +145,8 @@ onBeforeUnmount(release)
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
+    width: var(--icon-link);
+    height: var(--icon-link);
     font-size: 13px;
     color: var(--ink);
     background: #FFFFFF;

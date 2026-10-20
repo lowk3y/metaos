@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import DocLinks from '@/components/DocLinks.vue'
 import DropboxFolderList from '@/components/DropboxFolderList.vue'
 import EpisodeItem from '@/components/EpisodeItem.vue'
+import EpisodeRow from '@/components/EpisodeRow.vue'
 import HistoryTimeline from '@/components/HistoryTimeline.vue'
 import KoofrFolderList from '@/components/KoofrFolderList.vue'
 import PhotoStrip from '@/components/PhotoStrip.vue'
@@ -93,8 +94,12 @@ const photos = computed(() => (session.value ? photosOf(session.value.koofrFolde
           <span class="count">{{ session.episodes.length }}</span>
         </div>
         <p v-if="!session.episodes.length" class="note">No episodes are in this session yet.</p>
+        <!-- Each as the other lists have it: a line while it's in the works, its summary once it's released -->
         <ul v-else class="episodes">
-          <EpisodeItem v-for="episode in session.episodes" :key="episode.id" :episode="episode"/>
+          <template v-for="episode in session.episodes" :key="episode.id">
+            <EpisodeItem v-if="episode.status === 'PUBLISHED'" :episode="episode"/>
+            <EpisodeRow v-else :episode="episode" under-session/>
+          </template>
         </ul>
       </section>
 

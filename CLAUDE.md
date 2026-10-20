@@ -47,6 +47,8 @@ yarn build      # type-check (vue-tsc) and build into fe/dist
 - Signed in, episode titles and session labels lead to their pages, `/episodes/<code or ID>` and `/sessions/<ID>`:
   everything about them, and their history on a date rail (`HistoryTimeline.vue`), from the audit trail as
   [`History.kt`](src/main/kotlin/si/ogrodje/metaos/History.kt) tells it.
+- Episode ideas (`IDEA`) have a page of their own, `/ideas`, from the `ideas` query, which needs `metaos:read`, as
+  does its link in the header; the `episodes` query, and so the Episodes page, leaves them out.
 - Users sign in with keycloak-js (`fe/src/stores/auth.ts`), straight to Discord or Google (`idpHint`). On load it
   checks for a Keycloak session in a hidden iframe of `fe/public/silent-check-sso.html`, which is why MetaOS's pages
   may be framed by MetaOS itself (`X-Frame-Options: SAMEORIGIN`).

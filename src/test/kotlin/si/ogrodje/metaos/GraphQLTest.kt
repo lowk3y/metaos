@@ -70,14 +70,15 @@ class GraphQLTest @Autowired constructor(
         asMcpUser {
             episodesMCP.create(code = "gq-h1", title = "Draft title")
             episodesMCP.update(
-                code = "gq-h1", newCode = null, title = "Final title", titleB = "Other title", summary = "About it", machineSummary = "AI on it",
+                code = "gq-h1", newCode = null, title = "Final title", titleB = "Other title", summary = "About it",
+                tinySummary = "In short", machineSummary = "AI on it",
             )
             episodesMCP.assignPerson("gq-h1", checkNotNull(peopleMCP.create(name = "History Host", email = null).id), Role.HOST)
         }
         episodeFolders.save(EpisodeKoofrFolder(checkNotNull(episodes.findByCode("gq-h1")), "place-1", "/Epizode/S05E04 - Jure in Jošt (SAP)"))
 
         graphql(
-            """{ episode(ref: "gq-h1") { title titleB titleC summary machineSummary addedDate koofrFolders { path url }
+            """{ episode(ref: "gq-h1") { title titleB titleC summary tinySummary machineSummary addedDate koofrFolders { path url }
                  history { actor tool summary fields { field from to } } } }""",
             reader,
         )
@@ -87,6 +88,7 @@ class GraphQLTest @Autowired constructor(
             .andExpect(jsonPath("$.data.episode.title").value("Final title"))
             .andExpect(jsonPath("$.data.episode.titleB").value("Other title"))
             .andExpect(jsonPath("$.data.episode.titleC").value(nullValue()))
+            .andExpect(jsonPath("$.data.episode.tinySummary").value("In short"))
             .andExpect(jsonPath("$.data.episode.machineSummary").value("AI on it"))
             .andExpect(jsonPath("$.data.episode.history[*].summary", contains(
                 "Created the episode", "Changed the episode", "Added History Host as host",
@@ -94,7 +96,7 @@ class GraphQLTest @Autowired constructor(
             )))
             .andExpect(jsonPath("$.data.episode.history[0].actor").value("ana"))
             .andExpect(jsonPath("$.data.episode.history[0].tool").value("create_episode"))
-            .andExpect(jsonPath("$.data.episode.history[1].fields[*].field", contains("Title", "Title B", "Summary", "AI summary")))
+            .andExpect(jsonPath("$.data.episode.history[1].fields[*].field", contains("Title", "Title B", "Summary", "Tiny summary", "AI summary")))
             .andExpect(jsonPath("$.data.episode.history[1].fields[0].from").value("Draft title"))
             .andExpect(jsonPath("$.data.episode.history[1].fields[0].to").value("Final title"))
             .andExpect(jsonPath("$.data.episode.history[1].fields[1].to").value("Other title"))
@@ -188,16 +190,18 @@ class GraphQLTest @Autowired constructor(
     }
 
     @Test
-    fun `lists every episode to signed-in users, and only the released ones to anyone else`() {
+    fun `lists every episode but the ideas to signed-in users, and only the released ones to anyone else`() {
         released("gq-e1", LocalDate.of(2001, 1, 1))
-        episodes.save(Episode(title = "Being made", code = "gq-e2"))
-        episodes.save(Episode(title = "gq-e3, an idea without a code", code = null))
+        episodes.save(Episode(title = "Being made", code = "gq-e2").apply { status = EpisodeStatus.IN_PRODUCTION })
+        episodes.save(Episode(title = "gq-e3, on hold without a code", code = null).apply { status = EpisodeStatus.ON_HOLD })
+        episodes.save(Episode(title = "gq-e4, an idea", code = "gq-e4"))
 
         // Other tests' episodes are there too
         graphql("{ episodes { code title status } }", reader)
             .andExpect(jsonPath("$.errors").doesNotExist())
             .andExpect(jsonPath("$.data.episodes[*].code", hasItems("gq-e1", "gq-e2")))
-            .andExpect(jsonPath("$.data.episodes[*].title", hasItem("gq-e3, an idea without a code")))
+            .andExpect(jsonPath("$.data.episodes[*].title", hasItem("gq-e3, on hold without a code")))
+            .andExpect(jsonPath("$.data.episodes[*].status", not(hasItem("IDEA"))))
             // Codes latest first, those without one last
             .andExpect(jsonPath("$.data.episodes[-1].code").value(nullValue()))
 
@@ -206,6 +210,56 @@ class GraphQLTest @Autowired constructor(
             .andExpect(jsonPath("$.data.episodes[*].code", hasItem("gq-e1")))
             .andExpect(jsonPath("$.data.episodes[*].code", not(hasItem("gq-e2"))))
             .andExpect(jsonPath("$.data.episodes[*].status", everyItem(equalTo("PUBLISHED"))))
+    }
+
+    @Test
+    fun `shows who recommended an episode to signed-in users only`() {
+        val recommender = people.save(Person(name = "Recommending Person", email = null))
+        episodes.save(released("gq-r1", LocalDate.of(2001, 1, 1)).apply { recommendedBy = recommender })
+        val query = "{ episodes { code recommendedBy { id name } } }"
+
+        graphql(query, reader)
+            .andExpect(jsonPath("$.errors").doesNotExist())
+            .andExpect(jsonPath("$.data.episodes[?(@.code == 'gq-r1')].recommendedBy.name", contains("Recommending Person")))
+            .andExpect(jsonPath("$.data.episodes[?(@.code == 'gq-r1')].recommendedBy.id", contains(recommender.id.toString())))
+        graphql(query)
+            .andExpect(jsonPath("$.errors").doesNotExist())
+            .andExpect(jsonPath("$.data.episodes[?(@.code == 'gq-r1')].recommendedBy", contains(nullValue())))
+    }
+
+    @Test
+    fun `shows an episode's candidates to signed-in users only`() {
+        val episode = released("gq-c1", LocalDate.of(2001, 1, 1))
+        episodePeople.save(EpisodePerson(episode = episode, person = people.save(Person(name = "Confirmed Guest", email = null)), role = Role.GUEST))
+        episodePeople.save(EpisodePerson(episode = episode, person = people.save(Person(name = "Possible Guest", email = null)), role = Role.CANDIDATE))
+        val query = "{ episodes { code people { name roles } } }"
+
+        graphql(query, reader)
+            .andExpect(jsonPath("$.errors").doesNotExist())
+            .andExpect(jsonPath("$.data.episodes[?(@.code == 'gq-c1')].people[*].name", contains("Confirmed Guest", "Possible Guest")))
+            .andExpect(jsonPath("$.data.episodes[?(@.code == 'gq-c1')].people[1].roles[0]", contains("CANDIDATE")))
+        graphql(query)
+            .andExpect(jsonPath("$.errors").doesNotExist())
+            .andExpect(jsonPath("$.data.episodes[?(@.code == 'gq-c1')].people[*].name", contains("Confirmed Guest")))
+    }
+
+    @Test
+    fun `lists the ideas to signed-in users only, the most recently added first`() {
+        episodes.save(Episode(title = "gq-i1, an old idea", code = null).apply { addedDate = LocalDate.of(2001, 1, 1) })
+        episodes.save(Episode(title = "gq-i2, a new idea", code = "gq-i2").apply { addedDate = LocalDate.of(2099, 1, 1) })
+        episodes.save(Episode(title = "gq-i3, planned", code = "gq-i3").apply { status = EpisodeStatus.PLANNED })
+
+        // Other tests' ideas are there too, added in between
+        graphql("{ ideas { title status } }", reader)
+            .andExpect(jsonPath("$.errors").doesNotExist())
+            .andExpect(jsonPath("$.data.ideas[0].title").value("gq-i2, a new idea"))
+            .andExpect(jsonPath("$.data.ideas[-1].title").value("gq-i1, an old idea"))
+            .andExpect(jsonPath("$.data.ideas[*].title", not(hasItem("gq-i3, planned"))))
+            .andExpect(jsonPath("$.data.ideas[*].status", everyItem(equalTo("IDEA"))))
+
+        graphql("{ ideas { title } }")
+            .andExpect(jsonPath("$.errors[0].extensions.classification").value("UNAUTHORIZED"))
+            .andExpect(jsonPath("$.data").value(null as Any?))
     }
 
     @Test
@@ -223,9 +277,9 @@ class GraphQLTest @Autowired constructor(
         episodePeople.save(EpisodePerson(episode = latest, person = host, role = Role.PRODUCER))
         episodePeople.save(EpisodePerson(episode = latest, person = host, role = Role.HOST))
         episodeDocuments.save(EpisodeDocument(latest, "doc-of-gq-3"))
-        episodes.save(latest.apply { show = shows.save(Show(name = "gq Show", color = "#0404a4")) })
+        episodes.save(latest.apply { show = shows.save(Show(name = "gq Show", color = "#0404a4")); tinySummary = "In short" })
 
-        graphql("{ releasedEpisodes { code title show showColor airedDate youtubeUrl people { name roles } documents { url } } }")
+        graphql("{ releasedEpisodes { code title show showColor airedDate youtubeUrl tinySummary people { name roles } documents { url } } }")
             .andExpect(jsonPath("$.errors").doesNotExist())
             .andExpect(jsonPath("$.data.releasedEpisodes[*].code", contains("gq-3", "gq-2", "gq-1")))
             .andExpect(jsonPath("$.data.releasedEpisodes[0].show").value("gq Show"))
@@ -234,6 +288,8 @@ class GraphQLTest @Autowired constructor(
             .andExpect(jsonPath("$.data.releasedEpisodes[1].showColor").value(nullValue()))
             .andExpect(jsonPath("$.data.releasedEpisodes[0].airedDate").value("2099-03-01"))
             .andExpect(jsonPath("$.data.releasedEpisodes[0].youtubeUrl").value("https://www.youtube.com/watch?v=gq-3"))
+            .andExpect(jsonPath("$.data.releasedEpisodes[0].tinySummary").value("In short"))
+            .andExpect(jsonPath("$.data.releasedEpisodes[1].tinySummary").value(nullValue()))
             // Each person once, with all of their roles; hosts first
             .andExpect(jsonPath("$.data.releasedEpisodes[0].people[*].name", contains("Zala Host", "Ana Guest")))
             .andExpect(jsonPath("$.data.releasedEpisodes[0].people[0].roles", contains("HOST", "PRODUCER")))

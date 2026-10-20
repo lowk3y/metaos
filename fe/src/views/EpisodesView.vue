@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import EpisodeItem from '@/components/EpisodeItem.vue'
+import EpisodeRow from '@/components/EpisodeRow.vue'
 import { type Episode, EPISODE_FIELDS } from '@/episodes'
 import { errorMessage, graphql } from '@/graphql'
 import { useAuthStore } from '@/stores/auth'
@@ -11,21 +12,24 @@ const auth = useAuthStore()
 const episodes = ref<Episode[]>()
 const error = ref<string>()
 
+// A season's episodes in the works, a line each, and those released, with their summaries and where to listen
 interface Season {
   id: string
   title: string
-  episodes: Episode[]
+  working: Episode[]
+  released: Episode[]
 }
 
-// By the season in their codes (S05E08 is in season 5), as they come: the latest first, and ideas, which can do
-// without a code, last
+// By the season in their codes (S05E08 is in season 5), as they come: the latest first, then the bonus season (S99),
+// and those without a code, put on hold or cancelled before they had one, last. Ideas have a page of their own.
 const seasons = computed(() => {
   const groups = new Map<string, Season>()
   for (const episode of episodes.value ?? []) {
     const season = episode.code?.match(/^S(\d+)E/i)?.[1]
-    const id = season ? `season-${Number(season)}` : 'ideas'
-    if (!groups.has(id)) groups.set(id, { id, title: season ? `Season ${Number(season)}` : 'Ideas', episodes: [] })
-    groups.get(id)!.episodes.push(episode)
+    const id = season ? `season-${Number(season)}` : 'without-code'
+    if (!groups.has(id)) groups.set(id, { id, title: season ? `Season ${Number(season)}` : 'Without a code', working: [], released: [] })
+    const group = groups.get(id)!
+    ;(episode.status === 'PUBLISHED' ? group.released : group.working).push(episode)
   }
   return [...groups.values()]
 })
@@ -49,7 +53,7 @@ watch(() => auth.authenticated, async () => {
 <template>
   <main class="content">
     <p v-if="auth.ready && !auth.authenticated" class="note">
-      These are the released episodes. Signed in, you also see the ideas and what's being recorded and produced.
+      These are the released episodes. Signed in, you also see what's being recorded and produced.
     </p>
 
     <p v-if="error" class="note">The episodes didn't load: {{ error }}</p>
@@ -57,13 +61,25 @@ watch(() => auth.authenticated, async () => {
     <section v-for="season in seasons" v-else :key="season.id" :aria-labelledby="season.id">
       <div class="heading">
         <h2 :id="season.id">{{ season.title }}</h2>
-        <span class="count">{{ season.episodes.length }}</span>
+        <span class="count">{{ season.working.length + season.released.length }}</span>
       </div>
-      <!-- A released episode shows when it aired and where to listen; the others their status -->
-      <ul class="episodes">
-        <EpisodeItem v-for="episode in season.episodes" :key="episode.id" :episode="episode"
-                     :released="episode.status === 'PUBLISHED'"/>
-      </ul>
+      <!-- Headed only when a season has both -->
+      <template v-if="season.working.length">
+        <h3 v-if="season.released.length" class="subheading">
+          In the works <span class="count">{{ season.working.length }}</span>
+        </h3>
+        <ul class="episodes">
+          <EpisodeRow v-for="episode in season.working" :key="episode.id" :episode="episode"/>
+        </ul>
+      </template>
+      <template v-if="season.released.length">
+        <h3 v-if="season.working.length" class="subheading">
+          Released <span class="count">{{ season.released.length }}</span>
+        </h3>
+        <ul class="episodes">
+          <EpisodeItem v-for="episode in season.released" :key="episode.id" :episode="episode"/>
+        </ul>
+      </template>
     </section>
   </main>
 </template>
