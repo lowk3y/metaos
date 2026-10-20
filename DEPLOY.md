@@ -132,7 +132,7 @@ justfile                     the same steps by hand: just push, just deploy, jus
 - **Sessions last 7 days idle, 30 days at most.** Keycloak's defaults, 30 minutes and 10 hours, signed people out of
   the front-end and MCP clients several times a day, as refresh tokens last only as long as the session.
   `metaos-realm.json` has the longer ones; a realm imported before needs
-  [`keycloak/sessions.sh`](keycloak/sessions.sh) once. Keycloak's sign-in cookie still ends with the browser, as it
+  [`keycloak/sessions.sh`](keycloak/sessions.sh) once; production has had it (2026-10-20). Keycloak's sign-in cookie still ends with the browser, as it
   only outlives it with "Remember me", which logins through Discord and Google skip.
 
 ## Discord login
