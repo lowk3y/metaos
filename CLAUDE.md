@@ -150,18 +150,30 @@ Google revokes tokens with Gmail access when the account's password changes, and
 
 MetaOS's own files (pictures, videos, anything) are in Google Cloud Storage, in project `ogrodje-metaos`, through
 [`Storage.kt`](src/main/kotlin/si/ogrodje/metaos/Storage.kt). Unlike Drive and Gmail, this isn't the bot account: each
-environment has its own bucket and its own service account, which can use only that bucket.
+environment has two buckets, a private one and a public one, and its own service account, which can use only those two.
 [`google/storage.sh`](google/storage.sh) `setup` creates them (it's idempotent) and `key dev|prod` makes the keys;
 gcloud comes from the devenv shell.
 
-| Bucket                | Service account       | For                                                                   |
-|-----------------------|-----------------------|-----------------------------------------------------------------------|
-| `ogrodje-metaos-dev`  | `metaos-storage-dev`  | development and tests; `test/` is emptied after a day; no soft delete |
-| `ogrodje-metaos-prod` | `metaos-storage-prod` | production; deleted and replaced files are kept 30 days; Autoclass    |
+| Bucket                      | Service account       | For                                                                   |
+|-----------------------------|-----------------------|-----------------------------------------------------------------------|
+| `ogrodje-metaos-dev`        | `metaos-storage-dev`  | development and tests; `test/` is emptied after a day; no soft delete |
+| `ogrodje-metaos-public-dev` | `metaos-storage-dev`  | the same, public                                                      |
+| `ogrodje-metaos-prod`       | `metaos-storage-prod` | production; deleted and replaced files are kept 30 days; Autoclass    |
+| `media.ogrodje.si`          | `metaos-storage-prod` | the same, public, at `https://media.ogrodje.si` through Cloudflare    |
 
-- Both are in Frankfurt (`europe-west3`) and private. MetaOS hands out signed URLs instead, which it signs with the key
-  itself: `uploadUrl` starts a resumable upload, so big videos go from the browser straight to the bucket, without
-  MetaOS in between. The buckets' CORS allows that from the front-end's origins.
+- All are in Frankfurt (`europe-west3`). The private ones have public access prevention: MetaOS hands out signed URLs
+  instead, which it signs with the key itself: `uploadUrl` starts a resumable upload, so big videos go from the browser
+  straight to the bucket, without MetaOS in between. Their CORS allows that from the front-end's origins.
+- The public ones are for what everyone may see, e.g. episodes' thumbnails and people's avatars: anyone can read a file
+  whose path they know (`allUsers` has `legacyObjectReader`, which is `storage.objects.get` only), but nobody can list
+  them. Dev's is served by Google, at `https://storage.googleapis.com/ogrodje-metaos-public-dev/<path>`. Production's
+  is named after its domain: `media.ogrodje.si` is a proxied CNAME to `c.storage.googleapis.com` in Cloudflare, which
+  picks the bucket by the Host header. Two rules of the zone are for it: Configuration Rule `media: SSL Full` (Google's
+  certificate is for `*.storage.googleapis.com`, which Full (strict) would refuse) and Cache Rule `media: cache`, which
+  caches its files and tells browsers as their `Cache-Control` says, and nothing without one (errors). Smart Tiered
+  Caching is on for the zone, so Cloudflare's data centres ask one near the bucket instead of each asking Google. Creating a bucket named after a domain needs whoever runs
+  `setup` to be a verified owner of `ogrodje.si` in Google Search Console. A file deleted from it stays in Cloudflare's
+  cache until it's purged there.
 - `GOOGLE_STORAGE_KEY` (the service account's JSON key, on one line) and `METAOS_STORAGE_BUCKET` (`.envrc`) turn it on;
   it's off without the key. In production the key is in `metaos-secret` (`PROD_GOOGLE_STORAGE_KEY`,
   `k8s/set_secrets.sh`) and the bucket in `metaos-config`.
