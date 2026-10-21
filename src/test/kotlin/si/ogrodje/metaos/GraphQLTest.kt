@@ -1,7 +1,9 @@
 package si.ogrodje.metaos
 
 import com.jayway.jsonpath.JsonPath
+import graphql.introspection.IntrospectionQuery
 import org.hamcrest.Matchers.contains
+import org.hamcrest.Matchers.containsString
 import org.hamcrest.Matchers.empty
 import org.hamcrest.Matchers.equalTo
 import org.hamcrest.Matchers.everyItem
@@ -417,5 +419,31 @@ class GraphQLTest @Autowired constructor(
             .andExpect(jsonPath("$.data.people[?(@.name == 'Čedo People')].episodes[*].episode.code", contains("gq-pp1")))
             .andExpect(jsonPath("$.data.people[?(@.name == 'Čedo People')].episodes[*].roles[*]", contains("GUEST")))
         assertEquals(listOf("dr. Ana People", "Čedo People"), ours(anyone))
+    }
+
+    // People -> their episodes -> who recommended them -> ..., as deep as asked
+    private fun nested(loops: Int) =
+        "{ people { " + "episodes { episode { recommendedBy { ".repeat(loops) + "name" + " } } }".repeat(loops) + " } }"
+
+    @Test
+    fun `refuses queries nested deeper than the limit, before running them`() {
+        released("gq-deep", LocalDate.of(2001, 3, 4))
+        graphql(nested(4)).andExpect(jsonPath("$.errors").doesNotExist())
+        graphql(nested(5))
+            .andExpect(jsonPath("$.data").doesNotExist())
+            .andExpect(jsonPath("$.errors[0].message", containsString("maximum query depth exceeded")))
+    }
+
+    @Test
+    fun `answers the standard introspection query, for GraphiQL and code generators`() {
+        graphql(IntrospectionQuery.INTROSPECTION_QUERY).andExpect(jsonPath("$.errors").doesNotExist())
+    }
+
+    @Test
+    fun `refuses queries asking for more fields than the limit, even through aliases`() {
+        val many = (1..MAX_QUERY_FIELDS).joinToString(" ") { "e$it: releasedEpisodes(limit: 1) { code }" }
+        graphql("{ $many }")
+            .andExpect(jsonPath("$.data").doesNotExist())
+            .andExpect(jsonPath("$.errors[0].message", containsString("maximum query complexity exceeded")))
     }
 }

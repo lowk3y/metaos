@@ -2,8 +2,12 @@ package si.ogrodje.metaos
 
 import graphql.GraphQLError
 import graphql.GraphqlErrorBuilder
+import graphql.analysis.MaxQueryComplexityInstrumentation
+import graphql.analysis.MaxQueryDepthInstrumentation
 import graphql.schema.DataFetchingEnvironment
 import org.springframework.beans.factory.ObjectProvider
+import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Configuration
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.graphql.data.method.annotation.Argument
@@ -407,4 +411,23 @@ class BadRequestExceptionResolver : DataFetcherExceptionResolverAdapter() {
         (ex as? IllegalArgumentException)?.let {
             GraphqlErrorBuilder.newError(env).errorType(ErrorType.BAD_REQUEST).message(it.message.orEmpty()).build()
         }
+}
+
+/*
+ * Anyone may query /graphql, and one short query can ask for a lot: the same list under a thousand aliases, or, signed
+ * in, people, their episodes, who recommended those and their episodes again, as deep as it likes. The front-end's
+ * deepest query is about 6 levels and its biggest about 130 fields; these limits leave it room to grow and refuse the
+ * rest before running them. The standard introspection query needs depth 13.
+ */
+const val MAX_QUERY_DEPTH = 15
+const val MAX_QUERY_FIELDS = 300
+
+@Configuration
+class GraphQLLimits {
+
+    @Bean
+    fun maxQueryDepth() = MaxQueryDepthInstrumentation(MAX_QUERY_DEPTH)
+
+    @Bean
+    fun maxQueryComplexity() = MaxQueryComplexityInstrumentation(MAX_QUERY_FIELDS)
 }
