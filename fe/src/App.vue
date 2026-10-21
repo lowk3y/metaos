@@ -1,71 +1,73 @@
 <script setup lang="ts">
-import {ref, watch} from 'vue'
-import {RouterLink, RouterView} from 'vue-router'
-import {faDiscord, faGithub, faGoogle} from '@fortawesome/free-brands-svg-icons'
-import {faArrowRightFromBracket} from '@fortawesome/free-solid-svg-icons'
+import {computed, ref, watch} from 'vue'
+import {RouterLink, RouterView, useRoute} from 'vue-router'
+import {faDiscord, faGithub} from '@fortawesome/free-brands-svg-icons'
+import {faHouse, faLightbulb, faMicrophone, faPlug, faUserGroup} from '@fortawesome/free-solid-svg-icons'
 import {FontAwesomeIcon} from '@fortawesome/vue-fontawesome'
 import SearchPalette from '@/components/SearchPalette.vue'
+import UserMenu from '@/components/UserMenu.vue'
 import {graphql} from '@/graphql'
 import {useAuthStore} from '@/stores/auth'
 
 const auth = useAuthStore()
+const route = useRoute()
 
-// Who MetaOS takes the signed-in user for: their person, once one is linked to them by email
+// Who MetaOS takes the signed-in user for, and their person, once one is linked to them by email
 const name = ref<string>()
+const person = ref<{ id: string } | null>(null)
 
 interface Me {
   username: string | null
-  person: { name: string } | null
+  person: { id: string, name: string } | null
 }
 
 watch(() => auth.authenticated, async (authenticated) => {
   name.value = auth.username
+  person.value = null
   if (!authenticated) return
   try {
-    const {me} = await graphql<{ me: Me | null }>('{ me { username person { name } } }')
+    const {me} = await graphql<{ me: Me | null }>('{ me { username person { id name } } }')
     name.value = me?.person?.name ?? me?.username ?? auth.username
+    person.value = me?.person ?? null
   } catch (error) {
     console.error('MetaOS does not know the signed-in user', error)
   }
 }, {immediate: true})
+
+// The pages, as tabs in the order they're used; the team's only for signed-in users. A new section, e.g. Partners or
+// Analytics, is another tab here.
+const pages = computed(() => [
+  {path: '/', title: 'Home', icon: faHouse},
+  {path: '/episodes', title: 'Episodes', icon: faMicrophone},
+  {path: '/ideas', title: 'Ideas', icon: faLightbulb, team: true},
+  {path: '/people', title: 'People', icon: faUserGroup},
+  {path: '/usage', title: 'Usage', icon: faPlug},
+].filter((page) => !page.team || auth.authenticated))
+
+// A page's tab is underlined on its own pages too: Episodes on an episode's, People on a person's
+function current(path: string) {
+  return path === '/' ? route.path === '/' : route.path === path || route.path.startsWith(`${path}/`)
+}
 </script>
 
 <template>
+  <!-- The logo, and at the right search and you; under them the pages, as tabs -->
   <header>
-
-    <!-- On phones the pages go on a line of their own, under the logo and signing in or out -->
-    <div class="wrapper">
+    <div class="top">
       <RouterLink class="logo" to="/" aria-label="Ogrodje MetaOS, home"><img src="/favicon.png" alt=""/></RouterLink>
-
-      <nav class="pages" aria-label="Main">
-        <RouterLink to="/">Home</RouterLink>
-        <RouterLink to="/episodes">Episodes</RouterLink>
-        <!-- The team's, so only for signed-in users -->
-        <RouterLink v-if="auth.authenticated" to="/ideas">Ideas</RouterLink>
-        <RouterLink to="/people">People</RouterLink>
-        <RouterLink to="/usage">Usage</RouterLink>
-      </nav>
-
-      <div v-if="auth.ready" class="auth">
+      <div v-if="auth.ready" class="actions">
         <!-- Search is the team's, as most of what it finds is -->
-        <template v-if="auth.authenticated">
-          <SearchPalette/>
-          <span class="name">{{ name }}</span>
-          <button type="button" class="button" @click="auth.logout()">
-            <FontAwesomeIcon :icon="faArrowRightFromBracket"/>Sign out
-          </button>
-        </template>
-        <!-- On phones only the providers' names, so both fit beside the logo -->
-        <template v-else>
-          <button type="button" class="button" @click="auth.login('discord')">
-            <FontAwesomeIcon :icon="faDiscord"/><span><span class="long">Sign in with </span>Discord</span>
-          </button>
-          <button type="button" class="button" @click="auth.login('google')">
-            <FontAwesomeIcon :icon="faGoogle"/><span><span class="long">Sign in with </span>Google</span>
-          </button>
-        </template>
+        <SearchPalette v-if="auth.authenticated"/>
+        <UserMenu :name="name" :person="person"/>
       </div>
     </div>
+
+    <nav class="pages" aria-label="Main">
+      <RouterLink v-for="page in pages" :key="page.path" :to="page.path" :class="{ current: current(page.path) }"
+                  :aria-current="current(page.path) ? 'page' : undefined">
+        <FontAwesomeIcon :icon="page.icon"/>{{ page.title }}
+      </RouterLink>
+    </nav>
   </header>
 
   <!-- Takes the height the header and footer leave, so the footer stays at the bottom of short pages -->
@@ -92,114 +94,102 @@ watch(() => auth.authenticated, async (authenticated) => {
 
 header {
   border-bottom: 1px solid var(--hairline);
+}
 
-  .wrapper {
-    max-width: var(--content-width);
-    min-height: 64px;
-    margin: 0 auto;
-    padding: 0 24px;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    column-gap: 20px;
+// The page's column: the logo lines up with what's under it
+.top {
+  max-width: var(--content-width);
+  height: 64px;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.logo {
+  display: flex;
+
+  img {
+    display: block;
+    height: 34px;
+  }
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+// Tabs whose first label, not its padding, lines up with the logo. When they don't fit, they scroll sideways and fade
+// out at the edge.
+.pages {
+  max-width: var(--content-width);
+  margin: 0 auto;
+  padding: 0 14px;
+  display: flex;
+  overflow-x: auto;
+  scrollbar-width: none;
+  mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+
+  &::-webkit-scrollbar {
+    display: none;
   }
 
-  .logo {
-    display: flex;
+  a {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 10px;
+    font-size: 14px;
+    line-height: 20px;
+    color: var(--secondary);
+    white-space: nowrap;
 
-    img {
-      display: block;
-      height: 34px;
+    svg {
+      font-size: 13px;
+      color: var(--muted);
     }
+
+    &.current {
+      color: var(--ink);
+      font-weight: 500;
+      box-shadow: inset 0 -2px 0 var(--accent);
+
+      svg {
+        color: var(--accent-text);
+      }
+    }
+  }
+}
+
+// Phones: the page's narrower gutter, and the tabs closer together, without their icons
+@media (max-width: 640px) {
+  .top {
+    height: 56px;
+    padding: 0 16px;
+  }
+
+  .logo img {
+    height: 30px;
+  }
+
+  .actions {
+    gap: 8px;
   }
 
   .pages {
-    display: flex;
+    padding: 0 8px;
 
     a {
-      padding: 22px 10px;
-      font-size: 14px;
-      line-height: 20px;
-      color: var(--secondary);
+      padding: 10px 8px;
 
-      &.router-link-exact-active {
-        color: var(--ink);
-        font-weight: 500;
-        box-shadow: inset 0 -2px 0 var(--accent);
+      svg {
+        display: none;
       }
-    }
-  }
-
-  // At the right
-  .auth {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    margin-left: auto;
-  }
-
-  .name {
-    font-size: 13px;
-    line-height: 20px;
-    color: var(--secondary);
-  }
-
-  // Narrower than 800 px, the pages and signing in don't both fit beside the logo: the logo and signing in or out go on
-  // a line, and under them the pages, as tabs whose first label, not its padding, lines up with the logo
-  @media (max-width: 800px) {
-    .wrapper {
-      display: grid;
-      grid-template-columns: auto minmax(0, 1fr);
-      grid-template-rows: 60px auto;
-      grid-template-areas: 'logo auth' 'pages pages';
-      min-height: 0;
-    }
-
-    .logo {
-      grid-area: logo;
-    }
-
-    .pages {
-      grid-area: pages;
-      margin-left: -10px;
-
-      a {
-        padding: 10px;
-      }
-    }
-
-    .auth {
-      grid-area: auth;
-      justify-self: end;
-    }
-  }
-
-  // Phones: the page's narrower gutter, everything a little closer together, and only the providers' names
-  @media (max-width: 640px) {
-    .wrapper {
-      grid-template-rows: 56px auto;
-      column-gap: 12px;
-      padding: 0 16px;
-    }
-
-    .logo img {
-      height: 30px;
-    }
-
-    .pages {
-      margin-left: -8px;
-
-      a {
-        padding: 10px 8px;
-      }
-    }
-
-    .auth {
-      gap: 8px;
-    }
-
-    .name, .long {
-      display: none;
     }
   }
 }

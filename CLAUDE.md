@@ -54,6 +54,11 @@ yarn test       # the tests in src/**/__tests__, with vitest (./gradlew feTest, 
   some of it is public (`releasedEpisodes`); a bearer token says who is asking (`me`). What isn't public needs
   `metaos:read`: whole queries with `@PreAuthorize`, and fields that public episodes and sessions also have (history,
   docs, addresses, ...) come back empty for anyone else.
+- The header ([`App.vue`](fe/src/App.vue)) is two rows: the logo, and at the right Search and you
+  (`UserMenu.vue`: your initials, which open your name, your page and Sign out; or Sign in, which asks Discord or
+  Google); under them the pages as tabs, in the order they're used (`pages`), which scroll sideways when they don't
+  fit. A new section, e.g. Partners or Analytics, is another tab there. A tab is underlined on its own pages too,
+  Episodes on an episode's.
 - Signed in, episode titles and session labels lead to their pages, `/episodes/<code or ID>` and `/sessions/<ID>`:
   everything about them, and their history on a date rail (`HistoryTimeline.vue`), from the audit trail as
   [`History.kt`](src/main/kotlin/si/ogrodje/metaos/History.kt) tells it.
