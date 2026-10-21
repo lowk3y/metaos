@@ -13,6 +13,14 @@ MetaOS was designed for scaling, optimising and helping grow the [Ogrodje] organ
   changes what it does, update the front-end's Usage page in the same change: the tool's entry in
   [`fe/src/tools.ts`](fe/src/tools.ts) (name, group and one-line description). `UsageToolsTest` fails on a missing
   or extra name, but can't tell when a description no longer fits.
+- **The architecture diagram stays in sync.** [`architecture.png`](architecture.png), at the root and in README.md's
+  Architecture Overview, is drawn in [`architecture.svg`](architecture.svg). Whenever the architecture or an
+  integration changes, update `architecture.svg` in the same change and render the PNG again with `just architecture`
+  (headless Chrome), then look at it. That's when MetaOS starts or stops talking to a service (Google, Koofr, Dropbox,
+  ...) or uses one for something else (e.g. Gmail or Cloud Storage, drawn dashed as unused, getting a feature), when an
+  endpoint or a kind of client comes or goes, when sign-in or tokens work differently, or when what's deployed and
+  where changes (a new deployment, database or monitoring). Also update the README's paragraph under the diagram when
+  it no longer fits.
 
 ### Front-end
 

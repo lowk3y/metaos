@@ -4,6 +4,17 @@ MetaOS is an autonomous, agentic framework for managing and operating media orga
 
 MetaOS was designed for scaling, optimising and helping grow the [Ogrodje] organisation.
 
+## Architecture Overview
+
+![MetaOS's architecture: the browser and MCP clients, Keycloak, MetaOS, Postgres and the outside services](architecture.png)
+
+People use MetaOS through its web front-end or from an AI assistant over MCP. Both sign in with [Keycloak], and
+MetaOS checks their tokens with Keycloak's keys. MetaOS keeps its data in Postgres, where every change is logged, and
+works with Google Drive, Koofr and Dropbox as Ogrodje's bot account. Everything runs on Ogrodje's Kubernetes cluster,
+behind Cloudflare.
+
+The diagram is drawn in [`architecture.svg`](architecture.svg); `just architecture` renders `architecture.png` from it.
+
 ## Installing MCP
 
 ```bash

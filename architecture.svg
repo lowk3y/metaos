@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="780" viewBox="0 0 1240 780" role="img" aria-label="MetaOS's architecture: the browser and MCP clients reach MetaOS and Keycloak through Cloudflare and ingress-nginx. MetaOS checks tokens with Keycloak's keys, keeps its data in the shared Postgres, and calls Google Drive, Gmail, Cloud Storage, Koofr and Dropbox as Ogrodje's bot.">
+  <!--
+    MetaOS's architecture, the source of architecture.png (`just architecture` renders it). Keep it in step with the
+    system: CLAUDE.md says when.
+  -->
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;display=swap');
+
+    text { font-family: Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 12px; fill: #525252; }
+    .t { font-size: 14px; font-weight: 600; fill: #141414; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11.5px; fill: #141414; }
+    .m { font-size: 11px; fill: #6B6B6B; }
+    .mono.m { font-size: 11px; fill: #6B6B6B; }
+    .col { font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em; fill: #6B6B6B; }
+    .zl { font-size: 11px; font-weight: 500; fill: #6B6B6B; }
+    .box { fill: #FFFFFF; stroke: #D9D6DA; stroke-width: 1; }
+    .box.main { stroke: #EC4870; stroke-width: 1.5; }
+    .box.unused { stroke-dasharray: 4 3; }
+    .row { fill: #F6F5F6; }
+    .zone { fill: none; stroke: #C4C0C6; stroke-dasharray: 5 4; }
+    .band { fill: #F6F5F6; stroke: #D9D6DA; }
+    .edge { fill: none; stroke: #77727A; stroke-width: 1.25; }
+    .head { fill: #77727A; }
+  </style>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="head" d="M0,1 L9,5 L0,9 z"/>
+    </marker>
+  </defs>
+
+  <rect width="1240" height="780" fill="#FFFFFF"/>
+
+  <!-- Column headings -->
+  <text class="col" x="20" y="40">CLIENTS</text>
+  <text class="col" x="1060" y="40">OUTSIDE SERVICES</text>
+  <text class="m" x="1060" y="58">called as Ogrodje's bot</text>
+
+  <!-- The edge: TLS at Cloudflare, then the cluster's ingress -->
+  <rect class="band" x="232" y="92" width="30" height="608" rx="6"/>
+  <text class="m" transform="translate(251 612) rotate(-90)" text-anchor="middle">Cloudflare TLS → ingress-nginx</text>
+
+  <!-- Cluster and namespace -->
+  <rect class="zone" x="276" y="66" width="748" height="694" rx="12"/>
+  <text class="zl" x="292" y="88">ogrodje-one · Kubernetes</text>
+  <rect class="zone" x="292" y="100" width="716" height="530" rx="10"/>
+  <text class="zl" x="308" y="122">namespace metaos-prod</text>
+
+  <!-- Browser -->
+  <rect class="box" x="20" y="180" width="180" height="140" rx="8"/>
+  <text class="t" x="36" y="206">Browser</text>
+  <text x="36" y="226">Vue 3 front-end</text>
+  <text class="m" x="36" y="248">keycloak-js keeps the</text>
+  <text class="m" x="36" y="264">token in memory</text>
+
+  <!-- MCP clients -->
+  <rect class="box" x="20" y="470" width="180" height="96" rx="8"/>
+  <text class="t" x="36" y="496">MCP clients</text>
+  <text x="36" y="516">Claude Code, claude.ai,</text>
+  <text x="36" y="534">MCP Inspector</text>
+
+  <!-- Keycloak -->
+  <rect class="box" x="410" y="350" width="180" height="140" rx="8"/>
+  <text class="t" x="426" y="376">Keycloak</text>
+  <text class="mono m" x="426" y="394">metaos-auth.ogrodje.si</text>
+  <text x="426" y="416">realm metaos</text>
+  <text class="m" x="426" y="436">sign-in: Discord, Google</text>
+  <text class="m" x="426" y="454">sessions: 7 days idle,</text>
+  <text class="m" x="426" y="470">30 days at most</text>
+
+  <!-- MetaOS -->
+  <rect class="box main" x="664" y="144" width="324" height="450" rx="10"/>
+  <text class="t" x="680" y="170">MetaOS</text>
+  <text class="m" x="972" y="170" text-anchor="end">Spring Boot · Kotlin</text>
+  <text class="mono m" x="680" y="188">metaos.ogrodje.si</text>
+
+  <rect class="row" x="676" y="196" width="300" height="36" rx="5"/>
+  <text class="mono" x="688" y="218">/</text>
+  <text x="812" y="218">the front-end's pages</text>
+  <rect class="row" x="676" y="238" width="300" height="36" rx="5"/>
+  <text class="mono" x="688" y="260">/graphql</text>
+  <text x="812" y="260">data, with the token</text>
+  <rect class="row" x="676" y="280" width="300" height="36" rx="5"/>
+  <text class="mono" x="688" y="302">/koofr, /dropbox</text>
+  <text x="812" y="302">picture thumbnails</text>
+
+  <text class="col" x="680" y="344">INSIDE</text>
+  <text x="680" y="366">episodes, people, sessions, shows</text>
+  <text x="680" y="386">every change logged: who, with</text>
+  <text x="680" y="404">which client and which MCP tool</text>
+  <text x="680" y="426">outside connections checked hourly</text>
+
+  <rect class="row" x="676" y="500" width="300" height="36" rx="5"/>
+  <text class="mono" x="688" y="522">/mcp</text>
+  <text x="812" y="522">tools for AI assistants</text>
+  <rect class="row" x="676" y="542" width="300" height="36" rx="5"/>
+  <text class="mono" x="688" y="564">:9090</text>
+  <text x="812" y="564">actuator: health, metrics</text>
+
+  <!-- Postgres, shared with the cluster's other apps -->
+  <rect class="box" x="664" y="652" width="324" height="92" rx="8"/>
+  <text class="t" x="680" y="676">Postgres</text>
+  <text class="m" x="972" y="676" text-anchor="end">CNPG main-cluster, shared</text>
+  <rect class="row" x="676" y="688" width="146" height="44" rx="5"/>
+  <text class="mono" x="688" y="706">metaos</text>
+  <text class="m" x="688" y="723">domain, audit_log</text>
+  <rect class="row" x="830" y="688" width="146" height="44" rx="5"/>
+  <text class="mono" x="842" y="706">metaos_keycloak</text>
+  <text class="m" x="842" y="723">Keycloak's realm</text>
+
+  <!-- Prometheus -->
+  <rect class="box" x="410" y="652" width="180" height="60" rx="8"/>
+  <text class="t" x="426" y="676">Prometheus</text>
+  <text class="m" x="426" y="696">ServiceMonitor</text>
+
+  <!-- Outside services; dashed: connected and checked, but no feature uses it yet -->
+  <rect class="box" x="1060" y="132" width="160" height="56" rx="8"/>
+  <text class="t" x="1076" y="156">Google Drive</text>
+  <text class="m" x="1076" y="174">docs · refresh token</text>
+  <rect class="box unused" x="1060" y="204" width="160" height="56" rx="8"/>
+  <text class="t" x="1076" y="228">Gmail</text>
+  <text class="m" x="1076" y="246">not used yet</text>
+  <rect class="box unused" x="1060" y="276" width="160" height="56" rx="8"/>
+  <text class="t" x="1076" y="300">Cloud Storage</text>
+  <text class="m" x="1076" y="318">not used yet</text>
+  <rect class="box" x="1060" y="348" width="160" height="56" rx="8"/>
+  <text class="t" x="1076" y="372">Koofr</text>
+  <text class="m" x="1076" y="390">recordings, photos</text>
+  <rect class="box" x="1060" y="420" width="160" height="56" rx="8"/>
+  <text class="t" x="1076" y="444">Dropbox</text>
+  <text class="m" x="1076" y="462">artwork, by folder ID</text>
+  <text class="m" x="1060" y="506">each checked hourly,</text>
+  <text class="m" x="1060" y="522">reported as</text>
+  <text class="mono m" x="1060" y="540">metaos_*_connected</text>
+
+  <!-- Browser to MetaOS and Keycloak -->
+  <path class="edge" d="M200 214 H662" marker-end="url(#arrow)"/>
+  <path class="edge" d="M200 256 H662" marker-end="url(#arrow)"/>
+  <path class="edge" d="M200 298 H662" marker-end="url(#arrow)"/>
+  <path class="edge" d="M110 320 V400 H408" marker-end="url(#arrow)"/>
+  <text class="m" x="402" y="394" text-anchor="end">signs in, PKCE</text>
+
+  <!-- MCP clients to Keycloak and MetaOS -->
+  <path class="edge" d="M110 470 V440 H408" marker-end="url(#arrow)"/>
+  <text class="m" x="402" y="434" text-anchor="end">registers, signs in</text>
+  <path class="edge" d="M200 518 H662" marker-end="url(#arrow)"/>
+  <text class="m" x="460" y="511" text-anchor="middle">MCP over HTTP, with the token</text>
+
+  <!-- MetaOS checks tokens with Keycloak's keys -->
+  <path class="edge" d="M664 420 H592" marker-end="url(#arrow)"/>
+  <text class="m" x="627" y="413" text-anchor="middle">token keys</text>
+
+  <!-- MetaOS to Postgres -->
+  <path class="edge" d="M826 594 V650" marker-end="url(#arrow)"/>
+  <text class="m" x="836" y="645">JPA · Flyway</text>
+
+  <!-- Prometheus scrapes the actuator, which no Ingress routes -->
+  <path class="edge" d="M500 652 V560 H662" marker-end="url(#arrow)"/>
+  <text class="m" x="508" y="612">scrapes</text>
+
+  <!-- MetaOS to the outside services -->
+  <path class="edge" d="M988 160 H1058" marker-end="url(#arrow)"/>
+  <path class="edge" d="M988 232 H1058" marker-end="url(#arrow)"/>
+  <path class="edge" d="M988 304 H1058" marker-end="url(#arrow)"/>
+  <path class="edge" d="M988 376 H1058" marker-end="url(#arrow)"/>
+  <path class="edge" d="M988 448 H1058" marker-end="url(#arrow)"/>
+</svg>
