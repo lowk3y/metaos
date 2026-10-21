@@ -38,7 +38,7 @@ class SearchTest @Autowired constructor(
     private val searchMCP: SearchMCP,
 ) {
 
-    private val reader = jwt().jwt { it.claim("scope", API_READ_SCOPE) }
+    private val reader = jwt().jwt { it.claim("realm_access", APPROVED).claim("scope", API_READ_SCOPE) }
 
     private fun graphql(query: String, auth: RequestPostProcessor? = reader): ResultActions {
         val request = post("/graphql").contentType(MediaType.APPLICATION_JSON)

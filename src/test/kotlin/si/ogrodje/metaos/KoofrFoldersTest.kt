@@ -73,10 +73,15 @@ class KoofrFoldersTest @Autowired constructor(
         thumbnail("/Thumbs/cover.jpg").andExpect { status { isUnauthorized() } }
         mvc.get("/koofr/thumbnail") {
             param("place", "mount-media"); param("path", "/Thumbs/cover.jpg")
-            with(jwt().jwt { it.claim("scope", MCP_SCOPE) })
+            with(jwt().jwt { it.claim("realm_access", APPROVED).claim("scope", MCP_SCOPE) })
         }.andExpect { status { isForbidden() } }
 
-        val reader = jwt().jwt { it.claim("scope", API_READ_SCOPE) }
+        mvc.get("/koofr/thumbnail") {
+            param("place", "mount-media"); param("path", "/Thumbs/cover.jpg")
+            with(jwt().jwt { it.claim("scope", API_READ_SCOPE) }) // not approved
+        }.andExpect { status { isForbidden() } }
+
+        val reader = jwt().jwt { it.claim("realm_access", APPROVED).claim("scope", API_READ_SCOPE) }
         mvc.get("/koofr/thumbnail") { param("place", "mount-media"); param("path", "/Thumbs/cover.jpg"); with(reader) }.andExpect {
             status { isOk() }
             content { contentType("image/jpeg"); bytes(byteArrayOf(1, 2, 3)) }

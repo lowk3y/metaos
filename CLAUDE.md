@@ -52,7 +52,7 @@ yarn test       # the tests in src/**/__tests__, with vitest (./gradlew feTest, 
 - Data comes from the GraphQL API at `/graphql` ([`schema.graphqls`](src/main/resources/graphql/schema.graphqls),
   [`GraphQL.kt`](src/main/kotlin/si/ogrodje/metaos/GraphQL.kt)), through `fe/src/graphql.ts`. It's open to anyone, as
   some of it is public (`releasedEpisodes`); a bearer token says who is asking (`me`). What isn't public needs
-  `metaos:read`: whole queries with `@PreAuthorize`, and fields that public episodes and sessions also have (history,
+  `metaos:read` and an approved user (realm role `metaos-user`, `Security.kt`): whole queries with `@PreAuthorize`, and fields that public episodes and sessions also have (history,
   docs, addresses, ...) come back empty for anyone else.
 - The header ([`App.vue`](fe/src/App.vue)) is two rows: the logo, and at the right Search and you
   (`UserMenu.vue`: your initials, which open your name, your page and Sign out; or Sign in, which asks Discord or
@@ -96,7 +96,11 @@ docker compose up -d keycloak   # http://localhost:8180 (admin console: admin / 
 
 - MCP clients (Claude Code, MCP Inspector, ...) discover Keycloak via `/.well-known/oauth-protected-resource/mcp`,
   register themselves with Dynamic Client Registration (`localhost` redirect URIs only) and log the user in.
-- Tokens need the `mcp:tools` scope; it also puts the MCP URL into `aud`, which the server checks.
+- Tokens need the `mcp:tools` scope; it also puts the MCP URL into `aud`, which the server checks. They also need the
+  realm role `metaos-user`, an approved user's (`APPROVED_ROLE` in `Security.kt`, also on `/graphql`'s team data and
+  the thumbnails): Keycloak can issue the scope to more than approved users, e.g. a client registered through DCR for
+  its own service account, which no login and so no approval gate stands in front of. Test JWTs carry it with
+  `claim("realm_access", APPROVED)` (`TestTokens.kt`).
 - The front-end signs users in as `metaos-ui`, a public client with PKCE. Its tokens carry `metaos:read` and
   `metaos:write`, which put the `/graphql` URL into `aud` (and don't get them into `/mcp`). They're the client's own
   scopes, not realm defaults, as MCP clients registering themselves could ask for any realm default.
