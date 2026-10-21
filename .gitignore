@@ -24,3 +24,7 @@ verification-*
 /.idea/compiler.xml
 /.idea/kotlinc.xml
 /.idea/misc.xml
+
+# Claude Code
+.claude/worktrees/
+.claude/settings.local.json
