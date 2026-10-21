@@ -56,6 +56,21 @@ class EpisodesTest @Autowired constructor(
     }
 
     @Test
+    fun `restores an episode under a new code, when its own has been taken since`() {
+        episodesRepository.saveAndFlush(Episode(title = "Older", code = "ep-1511"))
+        episodesMCP.delete("ep-1511")
+        episodesRepository.saveAndFlush(Episode(title = "Newer", code = "ep-1511"))
+        episodesRepository.saveAndFlush(Episode(title = "Other", code = "ep-1513"))
+
+        assertFailsWith<IllegalArgumentException> { episodesMCP.restore("ep-1511", newCode = "EP-1513") }
+        assertFailsWith<IllegalArgumentException> { episodesMCP.restore("ep-1511", newCode = " ") }
+        val restored = episodesMCP.restore("ep-1511", newCode = " ep-1512 ")
+
+        assertEquals("ep-1512" to "Older", restored.code to restored.title)
+        assertEquals("Newer", episodesMCP.get("ep-1511")?.title)
+    }
+
+    @Test
     fun `can save and find episode by code`() {
         val episode = Episode(title = "Test Episode", code = "ep-101")
         val saved = episodesRepository.saveAndFlush(episode)

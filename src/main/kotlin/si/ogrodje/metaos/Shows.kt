@@ -40,4 +40,9 @@ interface ShowsRepository : JpaRepository<Show, UUID> {
     @Modifying(clearAutomatically = true)
     @Query("update shows set deleted_at = null where id = :id", nativeQuery = true)
     fun restore(id: UUID): Int
+
+    // A deleted show's name is free for a live one, so it may come back under another
+    @Modifying(clearAutomatically = true)
+    @Query("update shows set name = :name where id = :id and deleted_at is not null", nativeQuery = true)
+    fun renameDeleted(id: UUID, name: String): Int
 }

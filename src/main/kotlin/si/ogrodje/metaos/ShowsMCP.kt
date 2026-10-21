@@ -70,11 +70,23 @@ class ShowsMCP(
     @McpTool(
         name = "restore_show",
         description = "Bring back a soft-deleted show by its name (case-insensitive), with the episodes deleting it " +
-            "took out of it (unless they have been deleted or moved since)"
+            "took out of it (unless they have been deleted or moved since). Under a new name, if its own has been " +
+            "taken since"
     )
-    fun restore(@McpToolParam(description = "Show name (case-insensitive)") name: String): ShowDto {
-        require(shows.findByName(name) == null) { "Show $name already exists" }
+    fun restore(
+        @McpToolParam(description = "Show name (case-insensitive)") name: String,
+        @McpToolParam(description = "New unique name to restore it under, e.g. when its own has been taken since", required = false)
+        newName: String? = null,
+    ): ShowDto {
         val id = requireNotNull(shows.findDeletedIdByName(name)) { "There is no deleted show $name" }
+        val new = newName?.trim()
+        if (new == null) {
+            require(shows.findByName(name) == null) { "Show $name already exists; restore it under a new name (newName)" }
+        } else {
+            require(new.isNotEmpty()) { "Name must not be blank" }
+            require(shows.findByName(new) == null) { "Show $new already exists" }
+            shows.renameDeleted(id, new)
+        }
         shows.restore(id)
         episodes.reattachToShow(id)
         return requireNotNull(shows.findByIdOrNull(id)).toDto()

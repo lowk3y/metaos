@@ -123,4 +123,17 @@ class ShowsTest @Autowired constructor(
         assertFailsWith<IllegalArgumentException> { showsMCP.restore("Reused Show") }
         assertEquals("#000000", showsMCP.get("Reused Show")?.color)
     }
+
+    @Test
+    fun `restores a show under a new name, when its own has been taken since`() {
+        showsMCP.create(name = "Renamed Show", color = "#111111")
+        showsMCP.delete("Renamed Show")
+        showsMCP.create(name = "Renamed Show", color = "#222222")
+
+        assertFailsWith<IllegalArgumentException> { showsMCP.restore("Renamed Show", newName = "renamed show") }
+        val restored = showsMCP.restore("Renamed Show", newName = "Renamed Show (old)")
+
+        assertEquals("Renamed Show (old)" to "#111111", restored.name to restored.color)
+        assertEquals("#222222", showsMCP.get("Renamed Show")?.color)
+    }
 }

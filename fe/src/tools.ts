@@ -27,7 +27,7 @@ export const TOOL_GROUPS: ToolGroup[] = [
       { name: 'set_episode_status', description: 'Move an episode through its lifecycle, from idea to published, one step at a time' },
       { name: 'set_episode_link', description: 'Set or clear its YouTube, Spotify, Apple Podcasts or Patreon link' },
       { name: 'delete_episode', description: 'Delete an episode; it can be restored' },
-      { name: 'restore_episode', description: 'Bring back a deleted episode, with its people, links, session and show' },
+      { name: 'restore_episode', description: 'Bring back a deleted episode, with its people, links, session and show; under a new code if its own is taken' },
     ],
   },
   {
@@ -41,7 +41,7 @@ export const TOOL_GROUPS: ToolGroup[] = [
       { name: 'set_person_bio', description: 'Set or clear the line about who a person is, e.g. their role and company' },
       { name: 'set_person_link', description: 'Set or clear their homepage, LinkedIn, Twitter/X, Instagram or Facebook' },
       { name: 'delete_person', description: 'Delete a person; they drop off their episodes, and those they recommended, until they are restored' },
-      { name: 'restore_person', description: 'Bring back a deleted person, with their roles on episodes and the episodes they recommended' },
+      { name: 'restore_person', description: 'Bring back a deleted person, with their roles and the episodes they recommended; with another email, or none, if theirs is taken' },
       { name: 'list_episode_people', description: 'The people on an episode and their roles' },
       { name: 'assign_person_to_episode', description: 'Give a person a role on an episode: host, co-host, guest, producer, consultant, designer, or candidate for someone who could be its guest' },
       { name: 'remove_person_from_episode', description: 'Take a person off an episode: one of their roles, or all of them' },
@@ -75,7 +75,7 @@ export const TOOL_GROUPS: ToolGroup[] = [
       { name: 'create_show', description: 'Add a show' },
       { name: 'update_show', description: 'Rename a show or change its color' },
       { name: 'delete_show', description: 'Delete a show; its episodes are kept' },
-      { name: 'restore_show', description: 'Bring back a deleted show, with its episodes' },
+      { name: 'restore_show', description: 'Bring back a deleted show, with its episodes; under a new name if its own is taken' },
       { name: 'list_show_episodes', description: 'The episodes of a show' },
       { name: 'set_episode_show', description: 'Move an episode into a show, or out of one' },
     ],
@@ -141,10 +141,12 @@ export const TOOL_GROUPS: ToolGroup[] = [
   {
     id: 'history',
     title: 'History',
-    about: 'who changed what, and when',
+    about: 'who changed what, and when, and bringing back what was deleted',
     tools: [
       { name: 'get_history', description: 'Every change to an episode, person, session or show, with when and by whom' },
       { name: 'list_recent_changes', description: 'The latest changes to everything' },
+      { name: 'list_deleted', description: 'The deleted episodes, people, sessions and shows, with when and by whom, to restore' },
+      { name: 'restore_link', description: 'Bring back a removed role, Google Doc, Koofr or Dropbox folder, from the change that removed it' },
     ],
   },
 ]

@@ -259,14 +259,28 @@ class EpisodesMCP(
     @Transactional
     @McpTool(
         name = "restore_episode",
-        description = "Bring back a soft-deleted episode by its code (case-insensitive) or ID, " +
-            "with its people, links, session and show"
+        description = "Bring back a soft-deleted episode by its code (case-insensitive) or ID, with its people, links, " +
+            "session, show and who recommended it. Any of those deleted meanwhile come back to it once they're " +
+            "restored too. Under a new code, if its own has been taken since"
     )
-    fun restore(@McpToolParam(description = EPISODE_REF) code: String): EpisodeDto {
+    fun restore(
+        @McpToolParam(description = EPISODE_REF) code: String,
+        @McpToolParam(description = "New unique code to restore it under, e.g. when its own has been taken since", required = false)
+        newCode: String? = null,
+    ): EpisodeDto {
         val id = requireNotNull(code.toUuidOrNull()?.takeIf { episodes.isDeleted(it) } ?: episodes.findDeletedIdByCode(code)) {
             "There is no deleted episode $code"
         }
-        episodes.findDeletedCode(id)?.let { require(episodes.findByCode(it) == null) { "Episode $it already exists" } }
+        val new = newCode?.trim()
+        if (new == null) {
+            episodes.findDeletedCode(id)?.let {
+                require(episodes.findByCode(it) == null) { "Episode $it already exists; restore it under a new code (newCode)" }
+            }
+        } else {
+            require(new.isNotEmpty()) { "Code must not be blank" }
+            require(episodes.findByCode(new) == null) { "Episode $new already exists" }
+            episodes.recodeDeleted(id, new)
+        }
         episodes.restore(id)
         return requireNotNull(episodes.findByIdOrNull(id)).toDto()
     }

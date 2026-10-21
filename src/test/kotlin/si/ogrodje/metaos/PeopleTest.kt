@@ -236,4 +236,18 @@ class PeopleTest @Autowired constructor(
 
         assertFailsWith<IllegalArgumentException> { peopleMCP.restore(gone.id) }
     }
+
+    @Test
+    fun `restores a person with another email, or none, when theirs has been taken since`() {
+        val first = peopleMCP.create(name = "First", email = "reclaimed@ogrodje.si")
+        val second = peopleMCP.create(name = "Second", email = "reclaimed-too@ogrodje.si")
+        peopleMCP.delete(first.id!!)
+        peopleMCP.delete(second.id!!)
+        peopleMCP.create(name = "Claimant", email = "reclaimed@ogrodje.si")
+        peopleMCP.create(name = "Another Claimant", email = "reclaimed-too@ogrodje.si")
+
+        assertFailsWith<IllegalArgumentException> { peopleMCP.restore(first.id, newEmail = "RECLAIMED@ogrodje.si") }
+        assertEquals("first@ogrodje.si", peopleMCP.restore(first.id, newEmail = " first@ogrodje.si ").email)
+        assertNull(peopleMCP.restore(second.id!!, newEmail = "").email)
+    }
 }

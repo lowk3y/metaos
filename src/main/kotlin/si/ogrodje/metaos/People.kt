@@ -113,6 +113,11 @@ interface PeopleRepository : JpaRepository<Person, UUID> {
     @Modifying(clearAutomatically = true)
     @Query("update people set deleted_at = null where id = :id", nativeQuery = true)
     fun restore(id: UUID): Int
+
+    // A deleted person's email is free for a live one, so they may come back with another, or none
+    @Modifying(clearAutomatically = true)
+    @Query("update people set email = :email where id = :id and deleted_at is not null", nativeQuery = true)
+    fun setDeletedEmail(id: UUID, email: String?): Int
 }
 
 interface EpisodePeopleRepository : JpaRepository<EpisodePerson, UUID> {

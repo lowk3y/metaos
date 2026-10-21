@@ -120,12 +120,28 @@ class PeopleMCP(
     @McpTool(
         name = "restore_person",
         description = "Bring back a soft-deleted person, with their roles on episodes and the episodes they recommended " +
-            "(unless someone else has been credited with one since)"
+            "(unless someone else has been credited with one since). With another email, or none, if theirs has " +
+            "been taken since"
     )
-    fun restore(@McpToolParam(description = "Person ID") personId: UUID): PersonDto {
+    fun restore(
+        @McpToolParam(description = "Person ID") personId: UUID,
+        @McpToolParam(
+            description = "Email to restore them with, e.g. when theirs has been taken since; empty to restore them without one",
+            required = false,
+        )
+        newEmail: String? = null,
+    ): PersonDto {
         require(people.isDeleted(personId)) { "There is no deleted person $personId" }
-        people.findDeletedEmail(personId)?.let { email ->
-            require(people.findByEmail(email) == null) { "Person with email $email already exists" }
+        if (newEmail == null) {
+            people.findDeletedEmail(personId)?.let { email ->
+                require(people.findByEmail(email) == null) {
+                    "Person with email $email already exists; restore them with another email, or none (newEmail)"
+                }
+            }
+        } else {
+            val email = newEmail.trim().ifEmpty { null }
+            require(email == null || people.findByEmail(email) == null) { "Person with email $email already exists" }
+            people.setDeletedEmail(personId, email)
         }
         people.restore(personId)
         episodes.reattachToRecommender(personId)

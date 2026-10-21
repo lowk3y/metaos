@@ -173,6 +173,11 @@ interface EpisodesRepository : JpaRepository<Episode, UUID> {
     @Query("update episodes set deleted_at = null where id = :id", nativeQuery = true)
     fun restore(id: UUID): Int
 
+    // A deleted episode's code is free for a live one, so it may come back under another
+    @Modifying(clearAutomatically = true)
+    @Query("update episodes set code = :code where id = :id and deleted_at is not null", nativeQuery = true)
+    fun recodeDeleted(id: UUID, code: String): Int
+
     // Deleting a session or show takes its episodes out of it in the same transaction, so audit_log has them under
     // the same changed_at as the soft delete, as deleting a person takes them off the episodes they recommended. These
     // put them back, unless they have been deleted or changed since.

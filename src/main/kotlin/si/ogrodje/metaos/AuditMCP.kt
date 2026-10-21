@@ -12,6 +12,8 @@ import java.util.UUID
 
 data class ColumnChange(val from: Any?, val to: Any?)
 data class ChangeDto(
+    // restore_link takes it, for a change that removed a link
+    val id: Long,
     val at: OffsetDateTime,
     val table: String,
     val rowId: UUID,
@@ -25,6 +27,7 @@ data class ChangeDto(
 
 /** One row of audit_log: a row inserted, updated or deleted, as it was before and after (empty for none) */
 data class AuditRow(
+    val id: Long,
     val at: OffsetDateTime,
     val table: String,
     val rowId: UUID,
@@ -45,7 +48,7 @@ fun AuditRow.diff(): Map<String, ColumnChange> =
     (old.keys + new.keys).filter { it !in BOOKKEEPING_COLUMNS && old[it] != new[it] }
         .associateWith { ColumnChange(old[it], new[it]) }
 
-private fun AuditRow.toDto() = ChangeDto(at, table, rowId, operation, diff(), actor, actorId, client, tool)
+private fun AuditRow.toDto() = ChangeDto(id, at, table, rowId, operation, diff(), actor, actorId, client, tool)
 
 /** The audit trail (V6__audit_log.sql), for get_history and for the front-end's history (History.kt) */
 @Component
@@ -57,6 +60,7 @@ class AuditLog(
     private val toRow = RowMapper { rs, _ ->
         fun row(column: String) = rs.getString(column)?.let { jsonMapper.readValue<Map<String, Any?>>(it) }.orEmpty()
         AuditRow(
+            id = rs.getLong("id"),
             at = rs.getObject("changed_at", OffsetDateTime::class.java),
             table = rs.getString("table_name"),
             rowId = rs.getObject("row_id", UUID::class.java),
@@ -98,6 +102,8 @@ class AuditLog(
 
     fun recent(limit: Int): List<AuditRow> =
         jdbcTemplate.query("select * from audit_log order by id desc limit ?", toRow, limit)
+
+    fun find(id: Long): AuditRow? = jdbcTemplate.query("select * from audit_log where id = ?", toRow, id).singleOrNull()
 }
 
 @Component
@@ -108,7 +114,8 @@ class AuditMCP(private val auditLog: AuditLog) {
         description = "List every change to an episode, person, session or show, oldest first: what changed, when, " +
             "by whom, through which MCP client and tool. Includes people's roles on an episode, the documents, Koofr " +
             "and Dropbox folders linked to an episode or session, episodes moving in and out of a session or show and " +
-            "the episodes a person is credited with recommending. Soft deletes show up as updates that set deleted_at"
+            "the episodes a person is credited with recommending. Soft deletes show up as updates that set deleted_at; " +
+            "a removed link comes back with restore_link and the ID of the change that removed it"
     )
     fun history(@McpToolParam(description = "ID of the episode, person, session or show") id: UUID): List<ChangeDto> =
         auditLog.history(id).map { it.toDto() }
