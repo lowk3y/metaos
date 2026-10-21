@@ -5,8 +5,11 @@ import io.micrometer.core.instrument.MeterRegistry
 import org.postgresql.PGConnection
 import org.postgresql.ds.PGSimpleDataSource
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.jdbc.autoconfigure.JdbcConnectionDetails
 import org.springframework.context.SmartLifecycle
+import org.springframework.http.HttpHeaders
+import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.scheduling.annotation.Scheduled
@@ -16,7 +19,9 @@ import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 import java.sql.Connection
 import java.sql.SQLException
+import java.time.Duration
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ThreadLocalRandom
 
 /** Where Postgres says which table changed (V22__change_notifications.sql) */
 private const val CHANNEL = "metaos_changes"
@@ -43,7 +48,16 @@ private const val MAX_RETRY_MILLIS = 30_000L
  * their data again through /graphql, with their own token, so the events say no more than a table's name, to anyone.
  */
 @Component
-class Changes(private val database: JdbcConnectionDetails, registry: MeterRegistry) : SmartLifecycle {
+class Changes(
+    private val database: JdbcConnectionDetails,
+    registry: MeterRegistry,
+    // /events is open to anyone, so a pod takes at most this many streams; past it, /events answers 503 and the browser
+    // tries again, less often each time (fe/src/changes.ts)
+    @Value("\${metaos.changes.max-streams:1000}") private val maxStreams: Int,
+    // A stream ends after this, give or take a sixth, so they don't all reconnect at once; the browser connects again
+    // and its pages load their data again, as after any break (changes.ts)
+    @Value("\${metaos.changes.lifetime:30m}") private val lifetime: Duration,
+) : SmartLifecycle {
 
     private val logger = LoggerFactory.getLogger(javaClass)
 
@@ -56,6 +70,8 @@ class Changes(private val database: JdbcConnectionDetails, registry: MeterRegist
     val listening get() = listener?.listening == true
 
     init {
+        // A lifetime of 0 would never end a stream, and a negative one would fail every /events
+        require(maxStreams > 0 && lifetime.toMillis() > 0) { "metaos.changes: max-streams and lifetime must be positive" }
         Gauge.builder("metaos.changes.listening") { if (listening) 1 else 0 }
             .description("1 while MetaOS listens for changes in Postgres, for the front-end's pages")
             .register(registry)
@@ -64,9 +80,13 @@ class Changes(private val database: JdbcConnectionDetails, registry: MeterRegist
             .register(registry)
     }
 
-    /** A browser's stream of changes, until it goes away; it doesn't time out */
-    fun stream(): SseEmitter {
-        val stream = SseEmitter(0)
+    /** A browser's stream of changes, until it goes away or its lifetime is over; null when the pod has as many as it takes */
+    fun stream(): SseEmitter? {
+        if (streams.size >= maxStreams) return null
+        val millis = lifetime.toMillis()
+        val stream = SseEmitter(millis - millis / 6 + ThreadLocalRandom.current().nextLong(millis / 3 + 1))
+        // Over: ended like any other stream, rather than as an error
+        stream.onTimeout { stream.complete() }
         // Right away, as the response's headers go with its first bytes, and EventSource is open only once they come.
         // It says how soon to connect again after the stream ends, e.g. while this pod stops.
         stream.send(SseEmitter.event().reconnectTime(RECONNECT_MILLIS))
@@ -189,8 +209,12 @@ class Changes(private val database: JdbcConnectionDetails, registry: MeterRegist
 class ChangesController(private val changes: Changes) {
 
     @GetMapping("/events", produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
-    fun events(): ResponseEntity<SseEmitter> = ResponseEntity.ok()
-        // Tells ingress-nginx to pass each event on as it comes, whatever the Ingress says
-        .header("X-Accel-Buffering", "no")
-        .body(changes.stream())
+    fun events(): ResponseEntity<SseEmitter> {
+        val stream = changes.stream()
+            ?: return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).header(HttpHeaders.RETRY_AFTER, "30").build()
+        return ResponseEntity.ok()
+            // Tells ingress-nginx to pass each event on as it comes, whatever the Ingress says
+            .header("X-Accel-Buffering", "no")
+            .body(stream)
+    }
 }
