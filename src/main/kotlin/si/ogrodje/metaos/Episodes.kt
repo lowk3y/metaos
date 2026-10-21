@@ -63,6 +63,28 @@ class Episode(
     @Column(columnDefinition = "text") var tinySummary: String? = null
     @Column(columnDefinition = "text") var machineSummary: String? = null
 
+    // Its pictures in the public bucket (Images.kt), by EpisodeImage
+    @Column(name = "thumbnail_image_id") var thumbnailImageId: UUID? = null
+    @Column(name = "thumbnail_b_image_id") var thumbnailBImageId: UUID? = null
+    @Column(name = "thumbnail_c_image_id") var thumbnailCImageId: UUID? = null
+    @Column(name = "cover_image_id") var coverImageId: UUID? = null
+
+    fun imageId(kind: EpisodeImage): UUID? = when (kind) {
+        EpisodeImage.THUMBNAIL -> thumbnailImageId
+        EpisodeImage.THUMBNAIL_B -> thumbnailBImageId
+        EpisodeImage.THUMBNAIL_C -> thumbnailCImageId
+        EpisodeImage.COVER -> coverImageId
+    }
+
+    fun setImageId(kind: EpisodeImage, id: UUID?) {
+        when (kind) {
+            EpisodeImage.THUMBNAIL -> thumbnailImageId = id
+            EpisodeImage.THUMBNAIL_B -> thumbnailBImageId = id
+            EpisodeImage.THUMBNAIL_C -> thumbnailCImageId = id
+            EpisodeImage.COVER -> coverImageId = id
+        }
+    }
+
     fun setLink(platform: Platform, url: String?) {
         require(url == null || platform.accepts(url)) { "$url is not a $platform URL" }
         when (platform) {

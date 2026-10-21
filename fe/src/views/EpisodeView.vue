@@ -4,6 +4,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { keepUnchanged, useLiveRefresh } from '@/changes'
 import DocLinks from '@/components/DocLinks.vue'
 import DropboxFolderList from '@/components/DropboxFolderList.vue'
+import EpisodePictures from '@/components/EpisodePictures.vue'
 import HistoryTimeline from '@/components/HistoryTimeline.vue'
 import KoofrFolderList from '@/components/KoofrFolderList.vue'
 import ListenLinks from '@/components/ListenLinks.vue'
@@ -14,7 +15,8 @@ import SignInPrompt from '@/components/SignInPrompt.vue'
 import StatusLabel from '@/components/StatusLabel.vue'
 import {
   ARTWORK_FIELDS, artworkOf, DROPBOX_FIELDS, type DropboxPicture, EPISODE_FIELDS, type EpisodeDetails, episodePath,
-  formatDate, HISTORY_FIELDS, KOOFR_FIELDS, type KoofrPhoto, links, photosOf, roleName, sessionPath, sessionTitle,
+  formatDate, HISTORY_FIELDS, KOOFR_FIELDS, type KoofrPhoto, links, photosOf, PICTURE_FIELDS, roleName, sessionPath,
+  sessionTitle,
 } from '@/episodes'
 import { errorMessage, graphql } from '@/graphql'
 import { personPath } from '@/people'
@@ -49,7 +51,7 @@ async function loadEpisode(episodeRef: string, quietly = false) {
     const data = await graphql<{ episode: EpisodeDetails | null }>(`query ($ref: String!) {
       episode(ref: $ref) {
         ${EPISODE_FIELDS} titleB titleC summary machineSummary addedDate recommendedBy { id name } ${KOOFR_FIELDS} ${DROPBOX_FIELDS} ${ARTWORK_FIELDS}
-        ${HISTORY_FIELDS}
+        ${PICTURE_FIELDS} ${HISTORY_FIELDS}
       }
     }`, { ref: episodeRef })
     if (load !== loads) return
@@ -153,6 +155,7 @@ const photos = computed<KoofrPhoto[]>((previous) =>
         </dl>
       </section>
 
+      <EpisodePictures :episode="episode"/>
       <PhotoStrip v-if="artwork.length" title="Artwork" :photos="artwork" :folder="artwork[0]?.url" service="Dropbox" artwork/>
       <PhotoStrip v-if="photos.length" title="Photos" :photos="photos" :folder="episode.koofrFolders[0]?.url" service="Koofr"/>
 

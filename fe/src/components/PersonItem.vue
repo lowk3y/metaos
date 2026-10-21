@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import MarkedText from '@/components/MarkedText.vue'
+import PersonAvatar from '@/components/PersonAvatar.vue'
 import SocialLinks from '@/components/SocialLinks.vue'
 import { episodePath } from '@/episodes'
 import { type Person, personPath, rolesOf, socialLinks } from '@/people'
@@ -25,10 +26,11 @@ const roles = computed(() => rolesOf(props.person))
 const hasLinks = computed(() => socialLinks(props.person).length > 0)
 </script>
 
-<!-- A person: their name and who they are, then what they've been on the episodes and the latest of those, then where
-     they're online. Like an idea's row (IdeaItem), the links where an episode has where to listen. -->
+<!-- A person: their picture, their name and who they are, then what they've been on the episodes and the latest of those,
+     then where they're online. Like an idea's row (IdeaItem), the links where an episode has where to listen. -->
 <template>
   <li class="person">
+    <PersonAvatar class="picture" :image="person.avatar" :name="person.name" :size="40"/>
     <div class="main">
       <p class="title">
         <RouterLink v-if="auth.authenticated" :to="personPath(person)"><MarkedText :text="person.name" :words="words"/></RouterLink>
@@ -57,7 +59,7 @@ const hasLinks = computed(() => socialLinks(props.person).length > 0)
 
 .person {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
   column-gap: 16px;
   padding: 18px 0;
   border-top: 1px solid var(--rule);
@@ -83,10 +85,20 @@ const hasLinks = computed(() => socialLinks(props.person).length > 0)
   }
 }
 
+// On the name's line, which is 24px
+.picture {
+  margin-top: -8px;
+}
+
+// On phones the links go under the details, beside the picture
 @media (max-width: 640px) {
   .person {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: 40px minmax(0, 1fr);
     padding: 16px 0 12px;
+  }
+
+  .links {
+    grid-column: 2;
   }
 }
 

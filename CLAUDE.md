@@ -202,15 +202,39 @@ gcloud comes from the devenv shell.
   picks the bucket by the Host header. Two rules of the zone are for it: Configuration Rule `media: SSL Full` (Google's
   certificate is for `*.storage.googleapis.com`, which Full (strict) would refuse) and Cache Rule `media: cache`, which
   caches its files and tells browsers as their `Cache-Control` says, and nothing without one (errors). Smart Tiered
-  Caching is on for the zone, so Cloudflare's data centres ask one near the bucket instead of each asking Google. Creating a bucket named after a domain needs whoever runs
-  `setup` to be a verified owner of `ogrodje.si` in Google Search Console. A file deleted from it stays in Cloudflare's
-  cache until it's purged there.
+  Caching is on for the zone, so Cloudflare's data centres ask one near the bucket instead of each asking Google.
+  Creating a bucket named after a domain needs whoever runs `setup` to be a verified owner of `ogrodje.si` in Google
+  Search Console. A file deleted from it stays in Cloudflare's cache until it's purged there.
 - `GOOGLE_STORAGE_KEY` (the service account's JSON key, on one line) and `METAOS_STORAGE_BUCKET` (`.envrc`) turn it on;
-  it's off without the key. In production the key is in `metaos-secret` (`PROD_GOOGLE_STORAGE_KEY`,
-  `k8s/set_secrets.sh`) and the bucket in `metaos-config`.
-- Keys don't expire. The `storage` health check uses the key every hour and reports a deleted one there, in
-  `metaos_storage_connected` and in the log.
-- `GoogleCloudStorageTest` runs against the dev bucket when its key is in the environment, under `test/`.
+  it's off without the key. `METAOS_MEDIA_BUCKET` turns on the public one (`Media`), served at `METAOS_MEDIA_URL`, by
+  default `https://storage.googleapis.com/<bucket>`. In production the key is in `metaos-secret`
+  (`PROD_GOOGLE_STORAGE_KEY`, `k8s/set_secrets.sh`) and the rest in `metaos-config`.
+- Keys don't expire. The `storage` health check uses the key every hour, on both buckets, and reports a deleted one
+  there, in `metaos_storage_connected` and in the log.
+- `GoogleCloudStorageTest` runs against the dev buckets when the key is in the environment, under `test/`.
+
+### Pictures
+
+Pictures everyone may see are copied to the public bucket ([`Images.kt`](src/main/kotlin/si/ogrodje/metaos/Images.kt)):
+an episode's thumbnail (16:9), thumbnails B and C, which go with its alternative titles as they're A/B tested together,
+and its cover (square, for podcast apps); a person's avatar. `ImagesMCP` sets them from Dropbox or Koofr (a place and a
+path), or from Hygraph (an https URL on `*.graphassets.com`, the only hosts MetaOS fetches pictures from).
+
+- A picture is at `images/<sha256>/`: `original.<ext>` as it came (PNG, JPEG, WebP or GIF, up to 50 MB and 40
+  megapixels), and copies 320, 640, 1280 and 1920 px wide where it's wider, `<width>.jpg`, or `.png` when it's
+  see-through somewhere (Thumbnailator; TwelveMonkeys reads CMYK JPEGs and WebP). Its path is its content's hash, so
+  its files never change: they're served with `Cache-Control: public, max-age=31536000, immutable`. The same file is
+  stored once (`images`, by `sha256`), however often it's used; setting a picture again after it changed where it came
+  from makes a new one. One at a time, as a 3000 × 3000 cover takes some 400 MB to decode and resize.
+- `episodes.thumbnail_image_id`, `thumbnail_b_image_id`, `thumbnail_c_image_id`, `cover_image_id` and
+  `people.avatar_image_id` point at them; nothing deletes an image or its files. `History.kt` names them by the file
+  they were made from, e.g. "Thumbnail: ogrodje-vresGams-thumb1.png"; Hygraph's URLs have no file name, so the tools
+  take one (`name`).
+- GraphQL has them as `Image` (`thumbnail`, `thumbnailB`, `thumbnailC` and `cover` on `Episode`, `avatar` on `Person`),
+  batched for lists; thumbnails B and C only for the team, as titles B and C are. The front-end shows an episode's on
+  its page (`EpisodePictures.vue`) and avatars on the People and person pages (`PersonAvatar.vue`, initials without
+  one), with `srcset` from the copies (`fe/src/images.ts`), never the original, which may be 16 MB.
+- `ImagesTest` runs against a bucket in memory (`FakeStorage`), with fake Dropbox and Koofr.
 
 ### Koofr
 

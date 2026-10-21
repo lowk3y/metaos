@@ -30,12 +30,16 @@ private val EPISODE_COLUMNS = linkedMapOf(
     "recording_date" to "Recording date", "aired_date" to "Aired", "added_date" to "Added",
     "youtube_url" to "YouTube", "spotify_url" to "Spotify", "apple_podcasts_url" to "Apple Podcasts",
     "patreon_url" to "Patreon", "summary" to "Summary", "tiny_summary" to "Tiny summary", "machine_summary" to "AI summary",
+    "thumbnail_image_id" to "Thumbnail", "thumbnail_b_image_id" to "Thumbnail B", "thumbnail_c_image_id" to "Thumbnail C",
+    "cover_image_id" to "Cover",
 )
 private val SESSION_COLUMNS = linkedMapOf("date" to "Date", "location" to "Location", "address" to "Address")
 
 // Too long to show what they were and what they became
 private val LONG_COLUMNS = setOf("summary", "machine_summary")
 private val DATE_COLUMNS = setOf("recording_date", "aired_date", "added_date", "date")
+// Pictures, by the names of the files they were made from
+private val IMAGE_COLUMNS = setOf("thumbnail_image_id", "thumbnail_b_image_id", "thumbnail_c_image_id", "cover_image_id")
 
 /**
  * The history of an episode or a session, from the audit log (AuditLog): each change told as what happened, with
@@ -52,6 +56,7 @@ class History(private val auditLog: AuditLog, private val jdbcTemplate: JdbcTemp
             sessions = names("select id, date, location from sessions", rows.ids("session_id")) { rs ->
                 listOfNotNull(DATE.format(rs.getObject("date", LocalDate::class.java)), rs.getString("location")).joinToString(" · ")
             },
+            images = names("select id, name from images", IMAGE_COLUMNS.flatMap { rows.ids(it) }.toSet()),
         )
         return rows.map { row ->
             val described = names.describe(row, subject = id.toString())
@@ -75,7 +80,12 @@ class History(private val auditLog: AuditLog, private val jdbcTemplate: JdbcTemp
 
 private data class Described(val summary: String, val fields: List<FieldChangeDto> = emptyList())
 
-private class Names(val people: Map<String, String>, val shows: Map<String, String>, val sessions: Map<String, String>) {
+private class Names(
+    val people: Map<String, String>,
+    val shows: Map<String, String>,
+    val sessions: Map<String, String>,
+    val images: Map<String, String>,
+) {
 
     fun describe(row: AuditRow, subject: String): Described = when (row.table) {
         "episodes" -> if (row.rowId.toString() == subject) change(row, "episode", EPISODE_COLUMNS) else inSession(row, subject)
@@ -113,6 +123,7 @@ private class Names(val people: Map<String, String>, val shows: Map<String, Stri
         column == "show_id" -> shows[value.toString()] ?: "a show deleted since"
         column == "session_id" -> sessions[value.toString()] ?: "a session deleted since"
         column == "recommended_by" -> people[value.toString()] ?: "someone deleted since"
+        column in IMAGE_COLUMNS -> images[value.toString()] ?: "a picture"
         column in DATE_COLUMNS -> runCatching { DATE.format(LocalDate.parse(value.toString())) }.getOrDefault(value.toString())
         else -> value.toString()
     }

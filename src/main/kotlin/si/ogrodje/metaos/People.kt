@@ -31,6 +31,9 @@ class Person(
     @Column(columnDefinition = "text") var instagramUrl: String? = null
     @Column(columnDefinition = "text") var facebookUrl: String? = null
 
+    // Their picture in the public bucket (Images.kt)
+    @Column(name = "avatar_image_id") var avatarImageId: UUID? = null
+
     fun setSocialLink(network: SocialNetwork, url: String?) {
         require(url == null || network.accepts(url)) { "$url is not a $network URL" }
         when (network) {

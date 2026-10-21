@@ -14,6 +14,8 @@ import com.google.cloud.storage.StorageOptions
 import io.micrometer.core.instrument.MeterRegistry
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression
+import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Configuration
 import org.springframework.stereotype.Component
 import java.io.IOException
 import java.io.InputStream
@@ -37,7 +39,8 @@ data class SignedUpload(val url: URL, val headers: Map<String, String>, val expi
 
 /**
  * MetaOS's own files - pictures, videos, anything - in Google Cloud Storage: a bucket per environment, used as a service
- * account that can use only that bucket (google/storage.sh). Folders are only the slashes in paths.
+ * account that can use only that bucket and the environment's public one (Media, google/storage.sh). Folders are only
+ * the slashes in paths.
  */
 interface Storage {
     val bucket: String
@@ -48,8 +51,11 @@ interface Storage {
     /** The files in a folder and its subfolders, by path; the whole bucket for "" */
     fun list(folder: String, limit: Int): List<StoredFile>
 
-    /** Stores a file, streaming it; one already at the path is only replaced when [overwrite] is set */
-    fun upload(path: String, contentType: String, content: InputStream, overwrite: Boolean): StoredFile
+    /**
+     * Stores a file, streaming it; one already at the path is only replaced when [overwrite] is set. [cacheControl] is
+     * what it's served with, e.g. from the public bucket.
+     */
+    fun upload(path: String, contentType: String, content: InputStream, overwrite: Boolean, cacheControl: String? = null): StoredFile
 
     /** The start of a file, at most [maxBytes] */
     fun read(path: String, maxBytes: Int): ByteArray
@@ -132,8 +138,8 @@ class GoogleCloudStorage(
     }
 
     // A resumable upload, which the client retries chunk by chunk
-    override fun upload(path: String, contentType: String, content: InputStream, overwrite: Boolean): StoredFile {
-        val blob = BlobInfo.newBuilder(id(path)).setContentType(contentType).build()
+    override fun upload(path: String, contentType: String, content: InputStream, overwrite: Boolean, cacheControl: String?): StoredFile {
+        val blob = BlobInfo.newBuilder(id(path)).setContentType(contentType).setCacheControl(cacheControl).build()
         // Without it GCS would replace a file that's already there
         val options = if (overwrite) emptyArray() else arrayOf(BlobWriteOption.doesNotExist())
         return call {
@@ -177,8 +183,47 @@ class GoogleCloudStorage(
     override fun delete(path: String): Boolean = call { storage.delete(id(path)) }
 }
 
+/**
+ * MetaOS's files for everyone, e.g. episodes' thumbnails (Images.kt): those in the environment's public bucket
+ * (google/storage.sh), which anyone can read at [url] + their path, e.g. https://media.ogrodje.si/images/... in
+ * production, through Cloudflare, and straight from Google in development.
+ */
+class Media(val storage: Storage, url: String) {
+    val url = url.trimEnd('/')
+
+    fun url(path: String) = "$url/${storagePath(path)}"
+}
+
+/** The public bucket is off until there's a key (ConditionalOnStorage) and the bucket's name (METAOS_MEDIA_BUCKET) */
+@Target(AnnotationTarget.CLASS, AnnotationTarget.FUNCTION)
+@Retention(AnnotationRetention.RUNTIME)
+@ConditionalOnExpression("'\${metaos.storage.key:}' != '' and '\${metaos.media.bucket:}' != ''")
+annotation class ConditionalOnMedia
+
+@Configuration
+class MediaConfig {
+
+    // As the same service account, which may use both of its environment's buckets; served by Google itself unless
+    // METAOS_MEDIA_URL says otherwise
+    @Bean
+    @ConditionalOnMedia
+    fun media(
+        @Value("\${metaos.storage.key}") key: String,
+        @Value("\${metaos.media.bucket}") bucket: String,
+        @Value("\${metaos.media.url:}") url: String,
+    ) = Media(GoogleCloudStorage(key, bucket), url.ifBlank { "https://storage.googleapis.com/$bucket" })
+}
+
 @Component
 @ConditionalOnStorage
-class StorageHealthIndicator(private val storage: Storage, registry: MeterRegistry) : ConnectionHealthIndicator("storage", registry) {
-    override fun probe() = storage.list("", 1).let { "bucket" to storage.bucket }
+class StorageHealthIndicator(
+    private val storage: Storage,
+    registry: MeterRegistry,
+    private val media: Media? = null,
+) : ConnectionHealthIndicator("storage", registry) {
+    override fun probe(): Pair<String, String> {
+        storage.list("", 1)
+        media?.storage?.list("", 1)
+        return "bucket" to listOfNotNull(storage.bucket, media?.storage?.bucket).joinToString()
+    }
 }

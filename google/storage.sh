@@ -3,7 +3,8 @@
 # (ogrodje-metaos). Needs gcloud (in the devenv shell), signed in as an owner of the project: `gcloud auth login`.
 #
 #   google/storage.sh setup               the buckets and their service accounts; idempotent, re-run after editing
-#   google/storage.sh key dev >> .envrc   a key for dev's service account (GOOGLE_STORAGE_KEY, METAOS_STORAGE_BUCKET)
+#   google/storage.sh key dev >> .envrc   a key for dev's service account (GOOGLE_STORAGE_KEY, METAOS_STORAGE_BUCKET,
+#                                         METAOS_MEDIA_BUCKET)
 #   google/storage.sh key prod >> .envrc  one for production's (PROD_GOOGLE_STORAGE_KEY), which k8s/set_secrets.sh
 #                                         puts into metaos-secret
 #
@@ -159,7 +160,7 @@ case ${1:-} in
     gcloud iam service-accounts keys create "$KEY" --iam-account="$(account "$2")"
     echo
     echo "# Google Cloud Storage: key $(jq -r .private_key_id "$KEY") of $(account "$2") (google/storage.sh key $2)"
-    [[ $2 == dev ]] && echo "export METAOS_STORAGE_BUCKET=$(bucket dev)"
+    [[ $2 == dev ]] && echo "export METAOS_STORAGE_BUCKET=$(bucket dev)" && echo "export METAOS_MEDIA_BUCKET=$(media_bucket dev)"
     # One line, which single quotes keep as it is: the private key's newlines are \n in JSON
     echo "export $VARIABLE='$(jq -c . "$KEY")'"
     ;;

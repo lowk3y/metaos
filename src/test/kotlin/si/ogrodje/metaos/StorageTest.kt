@@ -125,6 +125,26 @@ class GoogleCloudStorageTest {
     }
 
     @Test
+    @EnabledIfEnvironmentVariable(named = "METAOS_MEDIA_BUCKET", matches = ".+")
+    fun `serves the public bucket's files to anyone, as they were stored, but lists it for no one`() {
+        val bucket = System.getenv("METAOS_MEDIA_BUCKET")
+        val media = Media(GoogleCloudStorage(key, bucket), "https://storage.googleapis.com/$bucket/")
+        val path = "$folder/Živjo.txt"
+        try {
+            media.storage.upload(path, "text/plain; charset=utf-8", "Živjo".byteInputStream(), overwrite = false, cacheControl = "public, max-age=60")
+            assertEquals("https://storage.googleapis.com/$bucket/$folder/Živjo.txt", media.url(path))
+
+            val read = http.send(HttpRequest.newBuilder(URI(media.url(path).replace("Živjo", "%C5%BDivjo"))).build(), BodyHandlers.ofString())
+            assertEquals(200, read.statusCode())
+            assertEquals("Živjo", read.body())
+            assertEquals("public, max-age=60", read.headers().firstValue("Cache-Control").orElse(null))
+            assertEquals(403, http.send(HttpRequest.newBuilder(URI(media.url)).build(), BodyHandlers.ofString()).statusCode())
+        } finally {
+            media.storage.delete(path)
+        }
+    }
+
+    @Test
     fun `reports whether MetaOS can reach its bucket`() {
         val registry = SimpleMeterRegistry()
         val indicator = StorageHealthIndicator(storage, registry)

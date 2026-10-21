@@ -78,6 +78,10 @@ dependencies {
     implementation("com.google.apis:google-api-services-gmail:v1-rev20261005-2.0.0")
     // Google Cloud Storage, as a service account per environment (Storage.kt)
     implementation("com.google.cloud:google-cloud-storage:2.75.0")
+    // Pictures made smaller for the public bucket (Images.kt); TwelveMonkeys reads what ImageIO can't: CMYK JPEGs, WebP
+    implementation("net.coobird:thumbnailator:0.4.21")
+    implementation("com.twelvemonkeys.imageio:imageio-jpeg:3.15.3")
+    implementation("com.twelvemonkeys.imageio:imageio-webp:3.15.3")
 
     // Koofr, as Ogrodje's bot account (Koofr.kt)
     implementation("com.github.koofr:java-koofr:3.8.10")

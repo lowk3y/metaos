@@ -1,6 +1,7 @@
 // People as MetaOS's GraphQL API has them (src/main/resources/graphql/schema.graphqls)
 
 import { type Episode, type Role, roleName } from '@/episodes'
+import { type Image, IMAGE_FIELDS } from '@/images'
 
 /** An episode a person is on, with their roles in it */
 export interface PersonEpisode {
@@ -18,6 +19,7 @@ export interface Person {
   twitterUrl: string | null
   instagramUrl: string | null
   facebookUrl: string | null
+  avatar: Image | null
   // The latest first; for anyone not signed in only the released ones
   episodes: PersonEpisode[]
 }
@@ -29,7 +31,7 @@ export function personPath(person: Pick<Person, 'id'>) {
 
 /** The fields of a Person, for a query */
 export const PERSON_FIELDS = `
-  id name bio homepageUrl linkedinUrl twitterUrl instagramUrl facebookUrl
+  id name bio homepageUrl linkedinUrl twitterUrl instagramUrl facebookUrl avatar { ${IMAGE_FIELDS} }
   episodes { episode { id code title } roles }
 `
 

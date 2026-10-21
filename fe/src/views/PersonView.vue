@@ -4,10 +4,12 @@ import { useRoute } from 'vue-router'
 import { keepUnchanged, useLiveRefresh } from '@/changes'
 import EpisodeItem from '@/components/EpisodeItem.vue'
 import EpisodeRow from '@/components/EpisodeRow.vue'
+import PersonAvatar from '@/components/PersonAvatar.vue'
 import SignInPrompt from '@/components/SignInPrompt.vue'
 import SocialLinks from '@/components/SocialLinks.vue'
 import { type Episode, EPISODE_FIELDS, type Role, roleName } from '@/episodes'
 import { errorMessage, graphql } from '@/graphql'
+import { IMAGE_FIELDS } from '@/images'
 import { type Person, rolesOf, socialLinks } from '@/people'
 import { useAuthStore } from '@/stores/auth'
 
@@ -38,7 +40,7 @@ async function loadPerson(id: string, quietly = false) {
   try {
     const data = await graphql<{ person: PersonDetails | null }>(`query ($id: ID!) {
       person(id: $id) {
-        id name bio homepageUrl linkedinUrl twitterUrl instagramUrl facebookUrl
+        id name bio homepageUrl linkedinUrl twitterUrl instagramUrl facebookUrl avatar { ${IMAGE_FIELDS} }
         episodes { episode { ${EPISODE_FIELDS} } roles }
         recommended { ${EPISODE_FIELDS} }
       }
@@ -86,10 +88,13 @@ const hasLinks = computed(() => (person.value ? socialLinks(person.value).length
     <p v-else-if="!person" class="note">Loading…</p>
 
     <template v-else>
-      <header class="title">
-        <p class="kicker">{{ person.episodes.length ? rolesOf(person) : 'Person' }}</p>
-        <h1>{{ person.name }}</h1>
-        <p v-if="person.bio" class="subtitle">{{ person.bio }}</p>
+      <header class="person">
+        <PersonAvatar v-if="person.avatar" :image="person.avatar" :name="person.name" :size="72"/>
+        <div class="title">
+          <p class="kicker">{{ person.episodes.length ? rolesOf(person) : 'Person' }}</p>
+          <h1>{{ person.name }}</h1>
+          <p v-if="person.bio" class="subtitle">{{ person.bio }}</p>
+        </div>
       </header>
 
       <section v-if="hasLinks || person.homepageUrl || byRole.length || person.recommended.length" aria-labelledby="details">
@@ -148,6 +153,13 @@ const hasLinks = computed(() => (person.value ? socialLinks(person.value).length
 
 <style scoped lang="scss">
 @use '../assets/page';
+
+// Their picture beside who they are
+.person {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
 
 .link {
   color: var(--accent-text);

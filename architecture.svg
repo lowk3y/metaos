@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="780" viewBox="0 0 1240 780" role="img" aria-label="MetaOS's architecture: the browser and MCP clients reach MetaOS and Keycloak through Cloudflare and ingress-nginx. MetaOS checks tokens with Keycloak's keys, keeps its data in the shared Postgres, which tells it what changed for the browser's pages to show right away, and calls Google Drive, Gmail, Cloud Storage, Koofr and Dropbox as Ogrodje's bot.">
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="810" viewBox="0 0 1240 810" role="img" aria-label="MetaOS's architecture: the browser and MCP clients reach MetaOS and Keycloak through Cloudflare and ingress-nginx. MetaOS checks tokens with Keycloak's keys, keeps its data in the shared Postgres, which tells it what changed for the browser's pages to show right away, and calls Cloud Storage, Google Drive, Gmail, Koofr and Dropbox, and fetches pictures from Hygraph. It copies pictures to its public bucket in Cloud Storage, from which the browser loads them at media.ogrodje.si, cached by Cloudflare.">
   <!--
     MetaOS's architecture, the source of architecture.png (`just architecture` renders it). Keep it in step with the
     system: CLAUDE.md says when.
@@ -30,12 +30,15 @@
     </marker>
   </defs>
 
-  <rect width="1240" height="780" fill="#FFFFFF"/>
+  <rect width="1240" height="810" fill="#FFFFFF"/>
+
+  <!-- Room above for the pictures' way from Cloud Storage to the browser -->
+  <g transform="translate(0 30)">
 
   <!-- Column headings -->
   <text class="col" x="20" y="40">CLIENTS</text>
   <text class="col" x="1060" y="40">OUTSIDE SERVICES</text>
-  <text class="m" x="1060" y="58">called as Ogrodje's bot</text>
+  <text class="m" x="1060" y="58">called by MetaOS</text>
 
   <!-- The edge: TLS at Cloudflare, then the cluster's ingress -->
   <rect class="band" x="232" y="92" width="30" height="608" rx="6"/>
@@ -122,13 +125,13 @@
 
   <!-- Outside services; dashed: connected and checked, but no feature uses it yet -->
   <rect class="box" x="1060" y="132" width="160" height="56" rx="8"/>
-  <text class="t" x="1076" y="156">Google Drive</text>
-  <text class="m" x="1076" y="174">docs · refresh token</text>
-  <rect class="box unused" x="1060" y="204" width="160" height="56" rx="8"/>
-  <text class="t" x="1076" y="228">Gmail</text>
-  <text class="m" x="1076" y="246">not used yet</text>
+  <text class="t" x="1076" y="156">Cloud Storage</text>
+  <text class="m" x="1076" y="174">public pictures · key</text>
+  <rect class="box" x="1060" y="204" width="160" height="56" rx="8"/>
+  <text class="t" x="1076" y="228">Google Drive</text>
+  <text class="m" x="1076" y="246">docs · refresh token</text>
   <rect class="box unused" x="1060" y="276" width="160" height="56" rx="8"/>
-  <text class="t" x="1076" y="300">Cloud Storage</text>
+  <text class="t" x="1076" y="300">Gmail</text>
   <text class="m" x="1076" y="318">not used yet</text>
   <rect class="box" x="1060" y="348" width="160" height="56" rx="8"/>
   <text class="t" x="1076" y="372">Koofr</text>
@@ -136,9 +139,12 @@
   <rect class="box" x="1060" y="420" width="160" height="56" rx="8"/>
   <text class="t" x="1076" y="444">Dropbox</text>
   <text class="m" x="1076" y="462">artwork, by folder ID</text>
-  <text class="m" x="1060" y="506">each checked hourly,</text>
-  <text class="m" x="1060" y="522">reported as</text>
-  <text class="mono m" x="1060" y="540">metaos_*_connected</text>
+  <rect class="box" x="1060" y="492" width="160" height="56" rx="8"/>
+  <text class="t" x="1076" y="516">Hygraph</text>
+  <text class="m" x="1076" y="534">CMS · pictures by URL</text>
+  <text class="m" x="1060" y="578">all but Hygraph checked</text>
+  <text class="m" x="1060" y="594">hourly, reported as</text>
+  <text class="mono m" x="1060" y="612">metaos_*_connected</text>
 
   <!-- Browser to MetaOS and Keycloak -->
   <path class="edge" d="M200 214 H662" marker-end="url(#arrow)"/>
@@ -172,4 +178,11 @@
   <path class="edge" d="M988 304 H1058" marker-end="url(#arrow)"/>
   <path class="edge" d="M988 376 H1058" marker-end="url(#arrow)"/>
   <path class="edge" d="M988 448 H1058" marker-end="url(#arrow)"/>
+  <path class="edge" d="M988 520 H1058" marker-end="url(#arrow)"/>
+  <text class="m" x="1023" y="152" text-anchor="middle">copies</text>
+
+  <!-- The browser loads pictures from the public bucket, past MetaOS: at media.ogrodje.si, cached by Cloudflare -->
+  <path class="edge" d="M140 180 V-8 H1204 V130" marker-end="url(#arrow)"/>
+  <text class="m" x="620" y="-14" text-anchor="middle">pictures for everyone: media.ogrodje.si, cached by Cloudflare</text>
+  </g>
 </svg>

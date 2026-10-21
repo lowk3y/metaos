@@ -362,6 +362,34 @@ class PeopleGraphQL(private val people: PeopleRepository, private val episodePeo
     }
 }
 
+// Pictures are anyone's who may see the episode or person, but for the thumbnails that go with the alternative titles,
+// which are the team's, as the titles are. Lists of episodes and people have them as well, so they're batched.
+@Controller
+class ImagesGraphQL(private val imagesRepository: ImagesRepository, private val images: ObjectProvider<Images>) {
+
+    @BatchMapping(typeName = "Episode", field = "thumbnail")
+    fun thumbnails(episodes: List<Episode>) = of(episodes) { it.thumbnailImageId }
+
+    @BatchMapping(typeName = "Episode", field = "thumbnailB")
+    fun thumbnailsB(episodes: List<Episode>) = if (signedIn()) of(episodes) { it.thumbnailBImageId } else emptyMap()
+
+    @BatchMapping(typeName = "Episode", field = "thumbnailC")
+    fun thumbnailsC(episodes: List<Episode>) = if (signedIn()) of(episodes) { it.thumbnailCImageId } else emptyMap()
+
+    @BatchMapping(typeName = "Episode", field = "cover")
+    fun covers(episodes: List<Episode>) = of(episodes) { it.coverImageId }
+
+    @BatchMapping(typeName = "Person", field = "avatar")
+    fun avatars(people: List<Person>) = of(people) { it.avatarImageId }
+
+    // None while the public bucket is off; those without one are left out, and so null
+    private fun <T : Any> of(items: List<T>, imageId: (T) -> UUID?): Map<T, ImageDto> {
+        val images = images.ifAvailable ?: return emptyMap()
+        val byId = imagesRepository.findAllById(items.mapNotNull(imageId).toSet()).associateBy { it.id }
+        return items.mapNotNull { item -> imageId(item)?.let(byId::get)?.let { item to images.toDto(it) } }.toMap()
+    }
+}
+
 // Search is the team's, as most of what it finds is: ideas, candidates, sessions
 @Controller
 class SearchGraphQL(private val search: Search) {
