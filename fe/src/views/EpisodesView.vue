@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { keepUnchanged, useLiveRefresh } from '@/changes'
 import EpisodeItem from '@/components/EpisodeItem.vue'
 import EpisodeRow from '@/components/EpisodeRow.vue'
 import { type Episode, EPISODE_FIELDS } from '@/episodes'
@@ -34,20 +35,26 @@ const seasons = computed(() => {
   return [...groups.values()]
 })
 
-// Loads again when the user signs in or out, as signed in there's more; only the latest load counts
+// Loads again when the user signs in or out, as signed in there's more, and quietly when MetaOS's data changes, when
+// what's shown stays if they don't come; only the latest load counts
 let loads = 0
 
-watch(() => auth.authenticated, async () => {
+async function loadEpisodes(quietly = false) {
   const load = ++loads
   try {
     const data = await graphql<{ episodes: Episode[] }>(`{ episodes { ${EPISODE_FIELDS} } }`)
     if (load !== loads) return
-    episodes.value = data.episodes
+    episodes.value = keepUnchanged(episodes.value, data.episodes)
     error.value = undefined
   } catch (e) {
-    if (load === loads) error.value = errorMessage(e)
+    if (load !== loads) return
+    if (quietly) throw e
+    error.value = errorMessage(e)
   }
-}, { immediate: true })
+}
+
+watch(() => auth.authenticated, () => void loadEpisodes(), { immediate: true })
+useLiveRefresh(() => loadEpisodes(true))
 </script>
 
 <template>

@@ -45,14 +45,16 @@ justfile                     the same steps by hand: just push, just deploy, jus
 - **Proxy headers.** The app trusts ingress-nginx's `X-Forwarded-*` headers, so its OAuth metadata advertises
   `https://metaos.ogrodje.si/mcp` rather than the pod's own address.
 - **Streaming.** The app's Ingress turns off nginx buffering and raises the timeouts to an hour, because Streamable
-  HTTP responses can be long-lived SSE streams.
+  HTTP responses can be long-lived SSE streams. `/events`, the front-end's stream of changes, is one too; it also says
+  `X-Accel-Buffering: no`, and sends a heartbeat every 25 s, as Cloudflare hangs up after 100 s of silence.
 - **Probes.** Both Deployments have a startup probe, so Flyway migrations and Keycloak's first-start bootstrap don't
   get the pod killed. Keycloak 26.8 answers `started` and `live` while still bootstrapping and only `ready` once
   it's done; readiness keeps traffic away until then. The app's probes use `/livez` and `/readyz` on port 8080 rather
   than actuator on 9090: that's a second Tomcat, which would still answer UP if 8080 hung. Startup probes wait 10 s,
   by when the ports are usually open, so a rollout doesn't log connection-refused warnings.
 - **Graceful shutdown.** Both Deployments have a 10 s `preStop` sleep (distroless has no `sleep` binary, so this uses
-  the Kubernetes sleep action) to let ingress-nginx drop the old pod before it shuts down.
+  the Kubernetes sleep action) to let ingress-nginx drop the old pod before it shuts down. The app then ends its
+  `/events` streams, which graceful shutdown would otherwise wait out, and browsers reconnect to the new pod.
 - **Resources.** Memory requests and limits, no CPU limit, as in bongbong: a CPU quota would only throttle JVM
   startup on a shared node.
 - **`set_secrets.sh` is idempotent.** It finds the CNPG primary by label, creates roles and databases only if

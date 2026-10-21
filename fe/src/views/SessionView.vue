@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { keepUnchanged, useLiveRefresh } from '@/changes'
 import DocLinks from '@/components/DocLinks.vue'
 import DropboxFolderList from '@/components/DropboxFolderList.vue'
 import EpisodeItem from '@/components/EpisodeItem.vue'
@@ -9,7 +10,9 @@ import HistoryTimeline from '@/components/HistoryTimeline.vue'
 import KoofrFolderList from '@/components/KoofrFolderList.vue'
 import PhotoStrip from '@/components/PhotoStrip.vue'
 import SignInPrompt from '@/components/SignInPrompt.vue'
-import { DROPBOX_FIELDS, EPISODE_FIELDS, formatDate, HISTORY_FIELDS, KOOFR_FIELDS, photosOf, type SessionDetails } from '@/episodes'
+import {
+  DROPBOX_FIELDS, EPISODE_FIELDS, formatDate, HISTORY_FIELDS, KOOFR_FIELDS, type KoofrPhoto, photosOf, type SessionDetails,
+} from '@/episodes'
 import { errorMessage, graphql } from '@/graphql'
 import { useAuthStore } from '@/stores/auth'
 
@@ -23,27 +26,38 @@ const error = ref<string>()
 // Only the latest load counts: an earlier one may answer after it
 let loads = 0
 
-// The session in the path: again when the path changes, or the user signs in
-watch([() => route.params.id, () => auth.authenticated], async ([id, authenticated]) => {
+// Quietly when MetaOS's data changes: what's shown stays until the new is there, and stays if it doesn't come
+async function loadSession(id: string, quietly = false) {
   const load = ++loads
-  session.value = undefined
-  error.value = undefined
-  if (!authenticated) return
+  if (!quietly) {
+    session.value = undefined
+    error.value = undefined
+  }
+  if (!auth.authenticated) return
   try {
     const data = await graphql<{ session: SessionDetails | null }>(`query ($id: ID!) {
       session(id: $id) {
         id date location address documents { fileId url } ${KOOFR_FIELDS} ${DROPBOX_FIELDS} ${HISTORY_FIELDS}
         episodes { ${EPISODE_FIELDS} }
       }
-    }`, { id: String(id) })
-    if (load === loads) session.value = data.session
+    }`, { id })
+    if (load !== loads) return
+    session.value = keepUnchanged(session.value, data.session)
+    error.value = undefined
   } catch (e) {
-    if (load === loads) error.value = errorMessage(e)
+    if (load !== loads) return
+    if (quietly) throw e
+    error.value = errorMessage(e)
   }
-}, { immediate: true })
+}
 
-// Once for the session, as the photos page through them from the first again when they change
-const photos = computed(() => (session.value ? photosOf(session.value.koofrFolders) : []))
+// The session in the path: again when the path changes, or the user signs in or out
+watch([() => route.params.id, () => auth.authenticated], ([id]) => void loadSession(String(id)), { immediate: true })
+useLiveRefresh(() => loadSession(String(route.params.id), true))
+
+// The same list while it's the same, as the photos page through them from the first again when they change
+const photos = computed<KoofrPhoto[]>((previous) =>
+  keepUnchanged(previous, session.value ? photosOf(session.value.koofrFolders) : []))
 </script>
 
 <template>

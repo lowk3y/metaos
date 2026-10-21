@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { keepUnchanged, useLiveRefresh } from '@/changes'
 import IdeaItem from '@/components/IdeaItem.vue'
 import SignInPrompt from '@/components/SignInPrompt.vue'
 import { EPISODE_FIELDS, type Idea } from '@/episodes'
@@ -15,19 +16,30 @@ const error = ref<string>()
 // Only the latest load counts: an earlier one may answer after it
 let loads = 0
 
-// Ideas are the team's, so they load only for a signed-in user, and again when one signs in
-watch(() => auth.authenticated, async (authenticated) => {
+// Ideas are the team's, so they load only for a signed-in user. Quietly when MetaOS's data changes: what's shown stays
+// until the new ones are there, and stays if they don't come.
+async function loadIdeas(quietly = false) {
   const load = ++loads
-  ideas.value = undefined
-  error.value = undefined
-  if (!authenticated) return
+  if (!quietly) {
+    ideas.value = undefined
+    error.value = undefined
+  }
+  if (!auth.authenticated) return
   try {
     const data = await graphql<{ ideas: Idea[] }>(`{ ideas { ${EPISODE_FIELDS} addedDate recommendedBy { id name } } }`)
-    if (load === loads) ideas.value = data.ideas
+    if (load !== loads) return
+    ideas.value = keepUnchanged(ideas.value, data.ideas)
+    error.value = undefined
   } catch (e) {
-    if (load === loads) error.value = errorMessage(e)
+    if (load !== loads) return
+    if (quietly) throw e
+    error.value = errorMessage(e)
   }
-}, { immediate: true })
+}
+
+// Again when one signs in
+watch(() => auth.authenticated, () => void loadIdeas(), { immediate: true })
+useLiveRefresh(() => loadIdeas(true))
 </script>
 
 <template>

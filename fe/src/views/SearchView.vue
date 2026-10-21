@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { faMagnifyingGlass } from '@fortawesome/free-solid-svg-icons'
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
+import { keepUnchanged, useLiveRefresh } from '@/changes'
 import EpisodeItem from '@/components/EpisodeItem.vue'
 import EpisodeRow from '@/components/EpisodeRow.vue'
 import MarkedText from '@/components/MarkedText.vue'
@@ -71,12 +72,12 @@ onBeforeUnmount(() => clearTimeout(timer))
 // Only the latest answer counts
 let asks = 0
 
-// What's in the address is searched: as typed, and also on Back, a reload, a link, and when the user signs in
-watch([() => route.query.q, () => auth.authenticated], async ([, authenticated]) => {
+// What's in the address, searched again quietly when MetaOS's data changes: what's found stays until the new results
+// are there, and stays if they don't come
+async function search(quietly = false) {
   const q = queryText().trim()
-  if (q !== text.value.trim()) text.value = q
   const asked = ++asks
-  if (!authenticated || !q) {
+  if (!auth.authenticated || !q) {
     found.value = undefined
     error.value = undefined
     return
@@ -84,14 +85,24 @@ watch([() => route.query.q, () => auth.authenticated], async ([, authenticated])
   try {
     const data = await graphql<{ search: SearchResults }>(SEARCH_QUERY, { text: q, limit: LIMIT })
     if (asked !== asks) return
-    found.value = { text: q, results: data.search }
+    found.value = keepUnchanged(found.value, { text: q, results: data.search })
     error.value = undefined
     // Another search starts with all of it, unless the kind shown has some
     if (!tabs.value.find((t) => t.id === tab.value)?.count) tab.value = 'all'
   } catch (e) {
-    if (asked === asks) error.value = errorMessage(e)
+    if (asked !== asks) return
+    if (quietly) throw e
+    error.value = errorMessage(e)
   }
+}
+
+// As typed, and also on Back, a reload, a link, and when the user signs in
+watch([() => route.query.q, () => auth.authenticated], () => {
+  const q = queryText().trim()
+  if (q !== text.value.trim()) text.value = q
+  void search()
 }, { immediate: true })
+useLiveRefresh(() => search(true))
 </script>
 
 <template>

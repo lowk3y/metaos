@@ -52,6 +52,8 @@ class SecurityConfig {
             it.requestMatchers("/mcp/**").hasAuthority("SCOPE_$MCP_SCOPE")
             // Anyone may ask for what's public, e.g. the released episodes; the rest needs a token (GraphQL.kt)
             it.requestMatchers("/graphql").permitAll()
+            // Which tables changed, for the front-end's pages to load again (Changes.kt)
+            it.requestMatchers(HttpMethod.GET, "/events").permitAll()
             // Thumbnails of the pictures in episodes' and sessions' Koofr and Dropbox folders (KoofrPhotos.kt, DropboxPictures.kt)
             it.requestMatchers("/koofr/**", "/dropbox/**").hasAuthority("SCOPE_$API_READ_SCOPE")
             // The front-end (Frontend.kt): its files and pages are public - its data comes from the API, with a token

@@ -40,9 +40,10 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v5
 
-      # Testcontainers runs its Postgres on the runner's Docker; bootJar builds fe/ with devenv's Node and Yarn
+      # Testcontainers runs its Postgres on the runner's Docker; feTest and bootJar test and build fe/ with devenv's Node
+      # and Yarn
       - name: Test and build the boot jar
-        run: devenv shell -- ./gradlew test bootJar
+        run: devenv shell -- ./gradlew test feTest bootJar
 
       - name: Connect to Tailscale
         uses: tailscale/github-action@v4

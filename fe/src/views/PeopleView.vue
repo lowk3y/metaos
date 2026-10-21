@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { keepUnchanged, useLiveRefresh } from '@/changes'
 import PersonItem from '@/components/PersonItem.vue'
 import { errorMessage, graphql } from '@/graphql'
 import { type Person, PERSON_FIELDS } from '@/people'
@@ -11,20 +12,26 @@ const auth = useAuthStore()
 const people = ref<Person[]>()
 const error = ref<string>()
 
-// Loads again when the user signs in or out, as signed in there's more; only the latest load counts
+// Loads again when the user signs in or out, as signed in there's more, and quietly when MetaOS's data changes, when
+// who's shown stays if they don't come; only the latest load counts
 let loads = 0
 
-watch(() => auth.authenticated, async () => {
+async function loadPeople(quietly = false) {
   const load = ++loads
   try {
     const data = await graphql<{ people: Person[] }>(`{ people { ${PERSON_FIELDS} } }`)
     if (load !== loads) return
-    people.value = data.people
+    people.value = keepUnchanged(people.value, data.people)
     error.value = undefined
   } catch (e) {
-    if (load === loads) error.value = errorMessage(e)
+    if (load !== loads) return
+    if (quietly) throw e
+    error.value = errorMessage(e)
   }
-}, { immediate: true })
+}
+
+watch(() => auth.authenticated, () => void loadPeople(), { immediate: true })
+useLiveRefresh(() => loadPeople(true))
 </script>
 
 <template>

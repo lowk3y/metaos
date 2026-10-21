@@ -129,7 +129,7 @@ metadata:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     # /mcp is Streamable HTTP: a response can be an SSE stream, which nginx must pass on unbuffered and not hang up
-    # on after its default 60 s read timeout
+    # on after its default 60 s read timeout. /events, the front-end's stream of changes (Changes.kt), is one too.
     nginx.ingress.kubernetes.io/proxy-buffering: "off"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"

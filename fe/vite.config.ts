@@ -25,6 +25,8 @@ export default defineConfig({
     proxy: {
       '/graphql': metaos,
       '/config.json': metaos,
+      // What changed, for the pages to show it (Changes.kt, src/changes.ts)
+      '/events': metaos,
       // Thumbnails of the pictures in Koofr and Dropbox folders (KoofrPhotos.kt, DropboxPictures.kt)
       '/koofr': metaos,
       '/dropbox': metaos,

@@ -64,7 +64,7 @@ class FrontendConfig : WebMvcConfigurer {
 
     private companion object {
         // MetaOS's own paths are never pages, e.g. /actuator/prometheus in k8s, where actuator is on another port
-        val SERVER_PATHS = setOf("actuator", "mcp", "graphql", "koofr", "dropbox", ".well-known")
+        val SERVER_PATHS = setOf("actuator", "mcp", "graphql", "events", "koofr", "dropbox", ".well-known")
     }
 }
 

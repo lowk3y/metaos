@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
+import { keepUnchanged, useLiveRefresh } from '@/changes'
 import EpisodeItem from '@/components/EpisodeItem.vue'
 import EpisodeRow from '@/components/EpisodeRow.vue'
 import FileLinks from '@/components/FileLinks.vue'
@@ -35,45 +36,55 @@ const sections = computed(() =>
     groups?.length ? [{ id, title, groups, count: groups.reduce((n, group) => n + group.episodes.length, 0) }] : []),
 )
 
-// The lists load again when the user signs in or out, as signed in they have more in them, e.g. docs. Only the
+// The lists load again when the user signs in or out, as signed in they have more in them, e.g. docs, and quietly
+// when MetaOS's data changes: what's shown stays until the new lists are there, and stays if they don't come. Only the
 // latest load counts: an earlier one may answer after it.
 let loads = 0
 
-async function loadReleased(load: number) {
+async function loadReleased(load: number, quietly: boolean) {
   try {
     const data = await graphql<{ releasedEpisodes: Episode[] }>(`{
       releasedEpisodes(limit: 3) { ${EPISODE_FIELDS} }
     }`)
     if (load !== loads) return
-    released.value = data.releasedEpisodes
+    released.value = keepUnchanged(released.value, data.releasedEpisodes)
     releasedError.value = undefined
   } catch (error) {
-    if (load === loads) releasedError.value = errorMessage(error)
+    if (load !== loads) return
+    if (quietly) throw error
+    releasedError.value = errorMessage(error)
   }
 }
 
-async function loadMaking(load: number) {
+async function loadMaking(load: number, quietly: boolean) {
   try {
     const data = await graphql<{ upcomingRecordings: Episode[], inProduction: Episode[] }>(`{
       upcomingRecordings { ${EPISODE_FIELDS} }
       inProduction { ${EPISODE_FIELDS} }
     }`)
     if (load !== loads) return
-    upcoming.value = bySession(data.upcomingRecordings)
-    inProduction.value = bySession(data.inProduction)
+    upcoming.value = keepUnchanged(upcoming.value, bySession(data.upcomingRecordings))
+    inProduction.value = keepUnchanged(inProduction.value, bySession(data.inProduction))
+    makingError.value = undefined
   } catch (error) {
-    if (load === loads) makingError.value = errorMessage(error)
+    if (load !== loads) return
+    if (quietly) throw error
+    makingError.value = errorMessage(error)
   }
 }
 
-watch(() => auth.authenticated, (authenticated) => {
+function loadLists(quietly = false) {
   const load = ++loads
-  upcoming.value = undefined
-  inProduction.value = undefined
-  makingError.value = undefined
-  void loadReleased(load)
-  if (authenticated) void loadMaking(load)
-}, { immediate: true })
+  if (!quietly) {
+    upcoming.value = undefined
+    inProduction.value = undefined
+    makingError.value = undefined
+  }
+  return Promise.all([loadReleased(load, quietly), auth.authenticated && loadMaking(load, quietly)])
+}
+
+watch(() => auth.authenticated, () => void loadLists(), { immediate: true })
+useLiveRefresh(() => loadLists(true))
 </script>
 
 <template>

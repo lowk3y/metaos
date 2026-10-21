@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { keepUnchanged, useLiveRefresh } from '@/changes'
 import DocLinks from '@/components/DocLinks.vue'
 import DropboxFolderList from '@/components/DropboxFolderList.vue'
 import HistoryTimeline from '@/components/HistoryTimeline.vue'
@@ -12,8 +13,8 @@ import ShowBadge from '@/components/ShowBadge.vue'
 import SignInPrompt from '@/components/SignInPrompt.vue'
 import StatusLabel from '@/components/StatusLabel.vue'
 import {
-  ARTWORK_FIELDS, artworkOf, DROPBOX_FIELDS, EPISODE_FIELDS, type EpisodeDetails, formatDate, HISTORY_FIELDS, KOOFR_FIELDS,
-  links, photosOf, roleName, sessionPath, sessionTitle,
+  ARTWORK_FIELDS, artworkOf, DROPBOX_FIELDS, type DropboxPicture, EPISODE_FIELDS, type EpisodeDetails, episodePath,
+  formatDate, HISTORY_FIELDS, KOOFR_FIELDS, type KoofrPhoto, links, photosOf, roleName, sessionPath, sessionTitle,
 } from '@/episodes'
 import { errorMessage, graphql } from '@/graphql'
 import { personPath } from '@/people'
@@ -21,6 +22,7 @@ import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
 const route = useRoute()
+const router = useRouter()
 
 // Undefined while it loads; null when there's no such episode
 const episode = ref<EpisodeDetails | null>()
@@ -29,28 +31,54 @@ const error = ref<string>()
 // Only the latest load counts: an earlier one may answer after it
 let loads = 0
 
-// The episode in the path, by its code or ID: again when the path changes, or the user signs in
-watch([() => route.params.ref, () => auth.authenticated], async ([episodeRef, authenticated]) => {
+/** Whether [episodeRef], from the path, is [episode]'s code or ID */
+function names(episode: EpisodeDetails, episodeRef: unknown) {
+  return episodeRef === episode.code || episodeRef === episode.id
+}
+
+// The episode by its code or ID. Quietly when MetaOS's data changes: what's shown stays until the new is there, and
+// stays if it doesn't come.
+async function loadEpisode(episodeRef: string, quietly = false) {
   const load = ++loads
-  episode.value = undefined
-  error.value = undefined
-  if (!authenticated) return
+  if (!quietly) {
+    episode.value = undefined
+    error.value = undefined
+  }
+  if (!auth.authenticated) return
   try {
     const data = await graphql<{ episode: EpisodeDetails | null }>(`query ($ref: String!) {
       episode(ref: $ref) {
         ${EPISODE_FIELDS} titleB titleC summary machineSummary addedDate recommendedBy { id name } ${KOOFR_FIELDS} ${DROPBOX_FIELDS} ${ARTWORK_FIELDS}
         ${HISTORY_FIELDS}
       }
-    }`, { ref: String(episodeRef) })
-    if (load === loads) episode.value = data.episode
+    }`, { ref: episodeRef })
+    if (load !== loads) return
+    episode.value = keepUnchanged(episode.value, data.episode)
+    error.value = undefined
+    // It got another code, which the path follows
+    if (quietly && data.episode && !names(data.episode, route.params.ref)) void router.replace(episodePath(data.episode))
   } catch (e) {
-    if (load === loads) error.value = errorMessage(e)
+    if (load !== loads) return
+    if (quietly) throw e
+    error.value = errorMessage(e)
   }
+}
+
+// The episode in the path: again when the path changes, unless to the episode shown, or the user signs in or out
+watch([() => route.params.ref, () => auth.authenticated], ([episodeRef, authenticated]) => {
+  if (authenticated && episode.value && names(episode.value, episodeRef)) return
+  void loadEpisode(String(episodeRef))
 }, { immediate: true })
 
-// The pictures in its Dropbox folders, which open in the folder of the first; and its photos, in its first Koofr folder
-const artwork = computed(() => (episode.value ? artworkOf(episode.value.dropboxFolders) : []))
-const photos = computed(() => (episode.value ? photosOf(episode.value.koofrFolders) : []))
+// By its ID, which stays when its code changes
+useLiveRefresh(() => loadEpisode(episode.value?.id ?? String(route.params.ref), true))
+
+// The pictures in its Dropbox folders, which open in the folder of the first; and its photos, in its first Koofr folder.
+// The same lists while they're the same, as the photos page through them from the first again when they change.
+const artwork = computed<DropboxPicture[]>((previous) =>
+  keepUnchanged(previous, episode.value ? artworkOf(episode.value.dropboxFolders) : []))
+const photos = computed<KoofrPhoto[]>((previous) =>
+  keepUnchanged(previous, episode.value ? photosOf(episode.value.koofrFolders) : []))
 </script>
 
 <template>

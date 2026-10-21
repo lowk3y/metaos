@@ -34,10 +34,12 @@ cd fe
 yarn            # install
 yarn dev        # dev server with hot reload, http://localhost:5173
 yarn build      # type-check (vue-tsc) and build into fe/dist
+yarn test       # the tests in src/**/__tests__, with vitest (./gradlew feTest, which CI runs)
 ```
 
 - The devenv shell runs `yarn install` in `fe/` when `yarn.lock` has changed, and `devenv up` runs `yarn dev`. Vite
-  proxies `/graphql` and `/config.json` to MetaOS on `:8080`, so in development too the browser sees one origin.
+  proxies `/graphql`, `/events` and `/config.json` to MetaOS on `:8080`, so in development too the browser sees one
+  origin.
 - `./gradlew bootJar` builds `fe/` (`feInstall`, `feBuild`) with the devenv's Node and Yarn, so it needs the devenv
   shell, and puts it into the jar's `static/`. [`Frontend.kt`](src/main/kotlin/si/ogrodje/metaos/Frontend.kt) serves
   it: the files, and `index.html` for the router's paths (`createWebHistory`); its files and pages are public, while
@@ -124,6 +126,30 @@ that started it; writes made any other way (psql, migrations) are logged without
 
 A new table needs its own `<table>_audit` trigger, `AuditLog.history` needs to know about new link columns, and
 `History.kt` how to say what a change to it means.
+
+### Live updates
+
+The front-end's pages show changes as they happen, without being reloaded. Each change the audit trail records also
+goes out on Postgres's channel `metaos_changes`, as its table's name
+([`V22__change_notifications.sql`](src/main/resources/db/migration/V22__change_notifications.sql)): when the transaction
+commits, once a table, to every connection listening, so to every pod. [`Changes.kt`](src/main/kotlin/si/ogrodje/metaos/Changes.kt)
+listens on a connection of its own, outside the pool, and passes it on to the browsers connected to its pod, as
+Server-Sent Events at `/events`.
+
+- `/events` is public and says no more than a table's name (`change`), or `resync` once it listens again after its
+  connection to Postgres broke, as it may have missed some. Pages load their data again through `/graphql`, with their
+  own token.
+- It sends a comment every 25 s (`metaos.changes.heartbeat`), as Cloudflare hangs up after 100 s of silence, and ends
+  its streams when the app stops, which graceful shutdown would otherwise wait out; the browsers connect to another pod.
+  `metaos_changes_listening` and `metaos_changes_streams` say how it's doing.
+- [`fe/src/changes.ts`](fe/src/changes.ts) keeps one `EventSource` for the app, and connects again when that gives up,
+  e.g. on a 502 while MetaOS restarts. A page passes `useLiveRefresh` a quiet load: one that keeps what's shown until
+  the new data is there (`keepUnchanged`, which keeps what didn't change as it was, so components keep their state),
+  and leaves it be when it fails. It loads once for a burst of changes, and after the stream connected again; a hidden
+  page loads when it's shown again, if anything changed or it was hidden for a minute (Koofr, Dropbox and Drive don't
+  tell MetaOS what changed).
+- A new table with an audit trigger is in it by itself. A new page that shows MetaOS's data should use
+  `useLiveRefresh`.
 
 ### Google (Drive and Gmail)
 

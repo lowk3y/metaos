@@ -69,7 +69,8 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springframework.boot:spring-boot-starter-flyway")
     implementation("org.flywaydb:flyway-database-postgresql")
-    runtimeOnly("org.postgresql:postgresql")
+    // Not only at runtime: Changes.kt listens for Postgres's notifications through its API
+    implementation("org.postgresql:postgresql")
 
     // Google Drive and Gmail, as Ogrodje's bot account (Google.kt)
     implementation("com.google.auth:google-auth-library-oauth2-http:1.54.0")
@@ -128,6 +129,14 @@ val feInstall by tasks.registering(Exec::class) {
     inputs.files(fe.file("package.json"), fe.file("yarn.lock"), fe.file(".yarnrc.yml"))
     // Yarn's record of what it installed - cheaper to check than all of node_modules
     outputs.file(fe.file("node_modules/.yarn-state.yml"))
+}
+
+val feTest by tasks.registering(Exec::class) {
+    group = "verification"
+    description = "Runs fe/'s tests (src/**/__tests__) with vitest."
+    dependsOn(feInstall)
+    workingDir(fe)
+    commandLine(yarn, "test")
 }
 
 val feBuild by tasks.registering(Exec::class) {

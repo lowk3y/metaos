@@ -71,6 +71,14 @@ class SecurityTest @Autowired constructor(private val mvc: MockMvc) {
     }
 
     @Test
+    fun `keeps the stream of changes public`() {
+        mvc.get("/events") { accept(MediaType.TEXT_EVENT_STREAM) }.andExpect {
+            status { isOk() }
+            request { asyncStarted() }
+        }
+    }
+
+    @Test
     fun `keeps health endpoint public`() {
         mvc.get("/actuator/health").andExpect { status { isOk() } }
     }

@@ -10,7 +10,8 @@ MetaOS was designed for scaling, optimising and helping grow the [Ogrodje] organ
 
 People use MetaOS through its web front-end or from an AI assistant over MCP. Both sign in with [Keycloak], and
 MetaOS checks their tokens with Keycloak's keys. MetaOS keeps its data in Postgres, where every change is logged, and
-works with Google Drive, Koofr and Dropbox as Ogrodje's bot account. Everything runs on Ogrodje's Kubernetes cluster,
+works with Google Drive, Koofr and Dropbox as Ogrodje's bot account. Postgres also tells MetaOS what changed, which it
+passes on to the open pages, so they show it without being reloaded. Everything runs on Ogrodje's Kubernetes cluster,
 behind Cloudflare.
 
 The diagram is drawn in [`architecture.svg`](architecture.svg); `just architecture` renders `architecture.png` from it.

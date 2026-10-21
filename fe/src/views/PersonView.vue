@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { keepUnchanged, useLiveRefresh } from '@/changes'
 import EpisodeItem from '@/components/EpisodeItem.vue'
 import EpisodeRow from '@/components/EpisodeRow.vue'
 import SignInPrompt from '@/components/SignInPrompt.vue'
@@ -26,12 +27,14 @@ const error = ref<string>()
 // Only the latest load counts: an earlier one may answer after it
 let loads = 0
 
-// The person in the path: again when the path changes, or the user signs in
-watch([() => route.params.id, () => auth.authenticated], async ([id, authenticated]) => {
+// Quietly when MetaOS's data changes: what's shown stays until the new is there, and stays if it doesn't come
+async function loadPerson(id: string, quietly = false) {
   const load = ++loads
-  person.value = undefined
-  error.value = undefined
-  if (!authenticated) return
+  if (!quietly) {
+    person.value = undefined
+    error.value = undefined
+  }
+  if (!auth.authenticated) return
   try {
     const data = await graphql<{ person: PersonDetails | null }>(`query ($id: ID!) {
       person(id: $id) {
@@ -39,12 +42,20 @@ watch([() => route.params.id, () => auth.authenticated], async ([id, authenticat
         episodes { episode { ${EPISODE_FIELDS} } roles }
         recommended { ${EPISODE_FIELDS} }
       }
-    }`, { id: String(id) })
-    if (load === loads) person.value = data.person
+    }`, { id })
+    if (load !== loads) return
+    person.value = keepUnchanged(person.value, data.person)
+    error.value = undefined
   } catch (e) {
-    if (load === loads) error.value = errorMessage(e)
+    if (load !== loads) return
+    if (quietly) throw e
+    error.value = errorMessage(e)
   }
-}, { immediate: true })
+}
+
+// The person in the path: again when the path changes, or the user signs in or out
+watch([() => route.params.id, () => auth.authenticated], ([id]) => void loadPerson(String(id)), { immediate: true })
+useLiveRefresh(() => loadPerson(String(route.params.id), true))
 
 // In the order an episode's people are listed
 const ROLES: Role[] = ['HOST', 'CO_HOST', 'GUEST', 'PRODUCER', 'CONSULTANT', 'DESIGNER', 'CANDIDATE']
