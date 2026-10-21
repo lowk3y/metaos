@@ -57,7 +57,7 @@ class SecurityTest @Autowired constructor(private val mvc: MockMvc, private val 
     fun `rejects tokens without the MCP scope`() {
         mvc.post("/mcp") {
             initialize()
-            with(jwt().jwt { it.claim("scope", "profile email") })
+            with(jwt().jwt { it.claim("realm_access", APPROVED).claim("scope", "profile email") })
         }.andExpect { status { isForbidden() } }
     }
 
@@ -66,12 +66,40 @@ class SecurityTest @Autowired constructor(private val mvc: MockMvc, private val 
     fun `accepts tokens with the MCP scope, without a session`() {
         mvc.post("/mcp") {
             initialize()
-            with(jwt().jwt { it.claim("scope", "profile $MCP_SCOPE") })
+            with(jwt().jwt { it.claim("realm_access", APPROVED).claim("scope", "profile $MCP_SCOPE") })
         }.andExpect {
             status { isOk() }
             header { doesNotExist("Mcp-Session-Id") }
             jsonPath("$.result.protocolVersion") { exists() }
         }
+    }
+
+    // Keycloak can issue the scope to more than approved users (Security.kt, APPROVED_ROLE)
+    @Test
+    fun `rejects the MCP scope without approval`() {
+        mvc.post("/mcp") {
+            initialize()
+            with(jwt().jwt { it.claim("scope", "profile $MCP_SCOPE") })
+        }.andExpect { status { isForbidden() } }
+        mvc.post("/mcp") {
+            initialize()
+            with(jwt().jwt { it.claim("realm_access", mapOf("roles" to listOf("default-roles-metaos"))).claim("scope", MCP_SCOPE) })
+        }.andExpect { status { isForbidden() } }
+    }
+
+    // A client registered through DCR for its own service account: client_credentials, no user, no approval gate
+    @Test
+    fun `rejects a client's own service account`() {
+        mvc.post("/mcp") {
+            contentType = MediaType.APPLICATION_JSON
+            accept(MediaType.APPLICATION_JSON, MediaType.TEXT_EVENT_STREAM)
+            content = """
+                {"jsonrpc":"2.0","id":3,"method":"tools/call",
+                 "params":{"name":"create_person","arguments":{"name":"Service Sanja"}}}
+            """.trimIndent()
+            with(jwt().jwt { it.subject("sa-1").claim("preferred_username", "service-account-6e6f6416").claim("scope", "profile email $MCP_SCOPE") })
+        }.andExpect { status { isForbidden() } }
+        assertEquals(0, jdbc.queryForObject("select count(*) from people where name = 'Service Sanja'", Int::class.java))
     }
 
     // A call on its own, as it may reach another pod than the one that answered initialize: the tool still knows who
@@ -85,7 +113,7 @@ class SecurityTest @Autowired constructor(private val mvc: MockMvc, private val 
                 {"jsonrpc":"2.0","id":2,"method":"tools/call",
                  "params":{"name":"create_person","arguments":{"name":"Stateless Stanko"}}}
             """.trimIndent()
-            with(jwt().jwt { it.subject("u-42").claim("preferred_username", "stanko").claim("scope", MCP_SCOPE) })
+            with(jwt().jwt { it.claim("realm_access", APPROVED).subject("u-42").claim("preferred_username", "stanko").claim("scope", MCP_SCOPE) })
         }.andExpect {
             status { isOk() }
             jsonPath("$.result.isError") { value(false) }

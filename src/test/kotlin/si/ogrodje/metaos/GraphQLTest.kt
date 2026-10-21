@@ -52,7 +52,7 @@ class GraphQLTest @Autowired constructor(
     private val details: DetailsGraphQL,
 ) {
 
-    private val reader = jwt().jwt { it.claim("scope", API_READ_SCOPE) }
+    private val reader = jwt().jwt { it.claim("realm_access", APPROVED).claim("scope", API_READ_SCOPE) }
 
     @AfterEach
     fun signOut() = SecurityContextHolder.clearContext()
@@ -343,7 +343,11 @@ class GraphQLTest @Autowired constructor(
         graphql("{ upcomingRecordings { code } }")
             .andExpect(jsonPath("$.errors[0].extensions.classification").value("UNAUTHORIZED"))
             .andExpect(jsonPath("$.data").value(null as Any?))
-        graphql("{ inProduction { code } }", jwt().jwt { it.claim("scope", MCP_SCOPE) })
+        graphql("{ inProduction { code } }", jwt().jwt { it.claim("realm_access", APPROVED).claim("scope", MCP_SCOPE) })
+            .andExpect(jsonPath("$.errors[0].extensions.classification").value("FORBIDDEN"))
+            .andExpect(jsonPath("$.data").value(null as Any?))
+        // metaos:read alone isn't enough: the user has to be approved (Security.kt)
+        graphql("{ inProduction { code } }", jwt().jwt { it.claim("scope", API_READ_SCOPE) })
             .andExpect(jsonPath("$.errors[0].extensions.classification").value("FORBIDDEN"))
             .andExpect(jsonPath("$.data").value(null as Any?))
     }

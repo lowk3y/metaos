@@ -296,7 +296,7 @@ class ImagesTest @Autowired constructor(
             .andExpect(jsonPath("$released.thumbnailB").value(null as Any?))
             .andExpect(jsonPath("$released.cover").value(null as Any?))
 
-        val team = jwt().jwt { it.claim("scope", API_READ_SCOPE) }
+        val team = jwt().jwt { it.claim("realm_access", APPROVED).claim("scope", API_READ_SCOPE) }
         graphql("""{ episode(ref: "${episode.id}") { thumbnailB { url name } thumbnailC { url } } person(id: "${person.id}") { avatar { url } } }""", team)
             .andExpect(jsonPath("$.errors").doesNotExist())
             .andExpect(jsonPath("$.data.episode.thumbnailB.url").value(b.url))

@@ -13,6 +13,14 @@
   "attributes": {
     "CreateDefaultClientScopes": "true"
   },
+  "roles": {
+    "realm": [
+      {
+        "name": "metaos-user",
+        "description": "Approved: may use MetaOS. MetaOS itself requires it on /mcp, /graphql's team data and the thumbnails"
+      }
+    ]
+  },
   "users": [
     {
       "username": "dev",
@@ -29,9 +37,15 @@
         }
       ],
       "realmRoles": [
-        "default-roles-metaos"
+        "default-roles-metaos",
+        "metaos-user"
       ]
     }
+  ],
+  "scopeMappings": [
+    { "clientScope": "mcp:tools", "roles": ["metaos-user"] },
+    { "clientScope": "metaos:read", "roles": ["metaos-user"] },
+    { "clientScope": "metaos:write", "roles": ["metaos-user"] }
   ],
   "defaultOptionalClientScopes": [
     "mcp:tools"

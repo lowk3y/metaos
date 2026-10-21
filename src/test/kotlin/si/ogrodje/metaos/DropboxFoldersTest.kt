@@ -73,7 +73,7 @@ class DropboxFoldersTest @Autowired constructor(
 
         // The folder's own first, then its folders' by name; no further than needed
         assertEquals(listOf("podcast.png"), pictures.of("1003", "/S09E44", limit = 1).map { it.name })
-        val reader = jwt().jwt { it.claim("scope", API_READ_SCOPE) }
+        val reader = jwt().jwt { it.claim("realm_access", APPROVED).claim("scope", API_READ_SCOPE) }
         val found = "$.data.episode.dropboxFolders[0].pictures"
         graphql("""{ episode(ref: "S09E44") { dropboxFolders { pictures(limit: 4) { name path thumbnail url } } } }""", reader)
             .andExpect(jsonPath("$.errors").doesNotExist())
@@ -91,7 +91,7 @@ class DropboxFoldersTest @Autowired constructor(
             mvc.get("/dropbox/thumbnail") { param("place", place); param("path", path); auth?.let { with(it) } }
 
         thumbnail("/S09E44/podcast.png", auth = null).andExpect { status { isUnauthorized() } }
-        thumbnail("/S09E44/podcast.png", auth = jwt().jwt { it.claim("scope", MCP_SCOPE) }).andExpect { status { isForbidden() } }
+        thumbnail("/S09E44/podcast.png", auth = jwt().jwt { it.claim("realm_access", APPROVED).claim("scope", MCP_SCOPE) }).andExpect { status { isForbidden() } }
         thumbnail("/S09E44/podcast.png").andExpect {
             status { isOk() }
             content { contentType("image/jpeg"); bytes(byteArrayOf(1, 2, 3)) }
@@ -182,7 +182,7 @@ class DropboxFoldersTest @Autowired constructor(
         dropbox.move("1001", "/Season 9/42 extra", "1002", "/42 extra")
 
         val query = "{ episodes { code dropboxFolders { placeName path missing url } session { dropboxFolders { path } } } }"
-        val reader = jwt().jwt { it.claim("scope", API_READ_SCOPE) }
+        val reader = jwt().jwt { it.claim("realm_access", APPROVED).claim("scope", API_READ_SCOPE) }
         val folders = "$.data.episodes[?(@.code == 'S09E42')].dropboxFolders[*]"
         graphql(query, reader)
             .andExpect(jsonPath("$.errors").doesNotExist())

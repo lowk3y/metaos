@@ -145,9 +145,10 @@ API. It's not in the realm JSON, because the realm is imported only once and the
 - **Generic OAuth v2 provider.** Keycloak has no Discord provider; the generic one reads `id`, `username`,
   `global_name` and `email` from `https://discord.com/api/users/@me`. The community keycloak-discord extension could
   restrict logins to a Discord server, but it targets Keycloak 26.0 and server membership isn't a fine enough gate.
-- **Approval gate.** Every realm user may use every MCP tool, so the post-login flow `discord-post-login` denies Discord
-  logins until the user has the realm role `metaos-user`. A first login creates the user and is denied; an admin
-  approves them by granting the role. Password users that an admin creates aren't affected.
+- **Approval gate.** Every approved user may use every MCP tool, so the post-login flow `discord-post-login` denies
+  Discord logins until the user has the realm role `metaos-user`. A first login creates the user and is denied; an admin
+  approves them by granting the role. The flow doesn't cover password users that an admin creates, but MetaOS itself
+  does: it takes no token without the role (see "Only approved users" below).
 - **Emails aren't trusted.** Discord also returns unverified emails, and a verified email links a login to a Person.
   When approving someone, also turn on *Email verified* once you know the address is theirs.
 - Verified on a throwaway Keycloak 26.8.1, with a second realm standing in for Discord: denied without the role,
@@ -173,6 +174,35 @@ Google provider. The role, the post-login flows and the admin API helpers are sh
   Google button redirects to `accounts.google.com/o/oauth2/v2/auth` with scope `openid profile email`.
 
 ## Front-end sign-in
+
+## Only approved users
+
+The approval gates only stand in front of logins, and Keycloak can issue a token without one: anonymous DCR lets a
+client register for its own service account (`client_credentials`), whose token got `mcp:tools` with no user and no
+approval. So both sides now require the realm role `metaos-user`:
+
+- **Keycloak** puts `mcp:tools`, `metaos:read` and `metaos:write` into a token only when its user has the role, through
+  the scopes' role scope mappings. They're in the realm JSON for new realms;
+  [`keycloak/approved_scopes.sh`](keycloak/approved_scopes.sh) adds them to an existing one.
+- **MetaOS** requires the role next to the scope on `/mcp`, `/graphql`'s team data and the thumbnails (`Security.kt`).
+
+The mappings take effect at once, so the order matters. As the IdP scripts, with `KEYCLOAK_ADMIN_USERNAME` and
+`KEYCLOAK_ADMIN_PASSWORD` from `.envrc`:
+
+```bash
+keycloak/approved_scopes.sh           # 1. report: enabled users without the role, service accounts with it
+                                      # 2. grant metaos-user to those who should keep access
+keycloak/approved_scopes.sh --apply   # 3. map the scopes; refuses while users without the role remain (--force: they go)
+                                      # 4. deploy the MetaOS that checks the role
+```
+
+Taking the role away now ends access within an access token's lifespan, at the next refresh; end the user's sessions
+in Keycloak to make it immediate.
+
+Verified on a throwaway Keycloak 26.8.1 with production's realm JSON: before the script a DCR `client_credentials`
+client got a token with `mcp:tools` and the MCP audience; after it, the same request gets neither, while an approved
+user's token from an MCP-style client (public, PKCE, full scope disabled) still has both and the role. Re-running the
+script changes nothing; it refuses `--apply` while unapproved users remain, and fails on a missing scope.
 
 The front-end signs users in with keycloak-js as client `metaos-ui`, and its "Sign in with Discord/Google" buttons go
 straight to the identity provider (`idpHint`), so the approval gates above apply to it as they do to MCP clients.

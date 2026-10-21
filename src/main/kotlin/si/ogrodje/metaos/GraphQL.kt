@@ -30,7 +30,8 @@ import java.util.UUID
 
 const val MAX_RELEASED_EPISODES = 20
 
-private const val SIGNED_IN = "hasAuthority('SCOPE_$API_READ_SCOPE')"
+// An approved user's token with metaos:read (Security.kt)
+private const val SIGNED_IN = "@approval.reads(authentication)"
 
 // When an episode is or will be recorded: its own date, or else its session's
 private val byRecordingDate = compareBy<Episode, LocalDate?>(nullsLast()) { it.recordingDate ?: it.session?.date }
@@ -93,8 +94,7 @@ data class DocumentLinkDto(val fileId: String) {
 }
 
 // Whether the caller may see what isn't public - what @PreAuthorize(SIGNED_IN) checks, for fields others get empty
-private fun signedIn() =
-    SecurityContextHolder.getContext().authentication?.authorities.orEmpty().any { it.authority == "SCOPE_$API_READ_SCOPE" }
+private fun signedIn() = SecurityContextHolder.getContext().authentication.approvedFor(API_READ_SCOPE)
 
 // Docs are the team's, so others get none
 @Controller
