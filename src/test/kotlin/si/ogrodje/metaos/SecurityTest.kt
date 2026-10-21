@@ -8,16 +8,18 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
 import org.springframework.context.annotation.Import
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt
 import org.springframework.test.web.servlet.MockHttpServletRequestDsl
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.post
+import kotlin.test.assertEquals
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import(TestcontainersConfig::class)
-class SecurityTest @Autowired constructor(private val mvc: MockMvc) {
+class SecurityTest @Autowired constructor(private val mvc: MockMvc, private val jdbc: JdbcTemplate) {
 
     private fun MockHttpServletRequestDsl.initialize() {
         contentType = MediaType.APPLICATION_JSON
@@ -59,15 +61,40 @@ class SecurityTest @Autowired constructor(private val mvc: MockMvc) {
         }.andExpect { status { isForbidden() } }
     }
 
+    // Stateless (application.properties): no session to keep, so any pod can answer
     @Test
-    fun `accepts tokens with the MCP scope`() {
+    fun `accepts tokens with the MCP scope, without a session`() {
         mvc.post("/mcp") {
             initialize()
             with(jwt().jwt { it.claim("scope", "profile $MCP_SCOPE") })
         }.andExpect {
             status { isOk() }
-            header { exists("Mcp-Session-Id") }
+            header { doesNotExist("Mcp-Session-Id") }
+            jsonPath("$.result.protocolVersion") { exists() }
         }
+    }
+
+    // A call on its own, as it may reach another pod than the one that answered initialize: the tool still knows who
+    // called it, and the audit trail has them and the tool
+    @Test
+    fun `calls tools without a session, as the token's user`() {
+        mvc.post("/mcp") {
+            contentType = MediaType.APPLICATION_JSON
+            accept(MediaType.APPLICATION_JSON, MediaType.TEXT_EVENT_STREAM)
+            content = """
+                {"jsonrpc":"2.0","id":2,"method":"tools/call",
+                 "params":{"name":"create_person","arguments":{"name":"Stateless Stanko"}}}
+            """.trimIndent()
+            with(jwt().jwt { it.subject("u-42").claim("preferred_username", "stanko").claim("scope", MCP_SCOPE) })
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.result.isError") { value(false) }
+            jsonPath("$.result.content[0].text") { value(containsString("Stateless Stanko")) }
+        }
+        val (actor, tool) = jdbc.queryForObject(
+            "select actor, tool from audit_log where table_name = 'people' and new_row ->> 'name' = 'Stateless Stanko'",
+        ) { rs, _ -> rs.getString(1) to rs.getString(2) }!!
+        assertEquals("stanko" to "create_person", actor to tool)
     }
 
     @Test

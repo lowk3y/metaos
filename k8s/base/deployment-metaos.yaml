@@ -32,7 +32,8 @@ metadata:
   namespace: metaos-prod
   labels: { app: metaos }
 spec:
-  replicas: 1
+  # Two, so one keeps answering while the other restarts or rolls out; MCP is stateless for that (application.properties)
+  replicas: 2
   selector: { matchLabels: { app: metaos } }
   template:
     metadata: { labels: { app: metaos } }
@@ -104,9 +105,11 @@ spec:
             failureThreshold: 3
 
           # No CPU limit: a quota would throttle JVM startup (JIT, Hibernate, Flyway) for no gain on a shared node
+          # Making copies of a big picture (Images.kt) takes a few hundred MB; the JVM takes 75% of the limit as heap
+          # (docker/Dockerfile), and at 1Gi the rest wasn't enough for what isn't heap. 2253Mi is 2.2Gi.
           resources:
-            requests: { cpu: 100m, memory: 512Mi }
-            limits: { memory: 1Gi }
+            requests: { cpu: 100m, memory: 768Mi }
+            limits: { memory: 2253Mi }
 ---
 apiVersion: v1
 kind: Service

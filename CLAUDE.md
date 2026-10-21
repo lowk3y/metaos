@@ -225,7 +225,8 @@ path), or from Hygraph (an https URL on `*.graphassets.com`, the only hosts Meta
   see-through somewhere (Thumbnailator; TwelveMonkeys reads CMYK JPEGs and WebP). Its path is its content's hash, so
   its files never change: they're served with `Cache-Control: public, max-age=31536000, immutable`. The same file is
   stored once (`images`, by `sha256`), however often it's used; setting a picture again after it changed where it came
-  from makes a new one. One at a time, as a 3000 × 3000 cover takes some 400 MB to decode and resize.
+  from makes a new one. One at a time, the download too, as a 3000 × 3000 cover takes some 400 MB to decode and
+  resize; at a 1Gi limit, 17 at once got the pod OOM-killed, hence its 2.2Gi.
 - `episodes.thumbnail_image_id`, `thumbnail_b_image_id`, `thumbnail_c_image_id`, `cover_image_id` and
   `people.avatar_image_id` point at them; nothing deletes an image or its files. `History.kt` names them by the file
   they were made from, e.g. "Thumbnail: ogrodje-vresGams-thumb1.png"; Hygraph's URLs have no file name, so the tools
@@ -303,6 +304,11 @@ and its Keycloak at `https://metaos-auth.ogrodje.si`. Pushes to `master` deploy 
 [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml); [`k8s/README.md`](k8s/README.md) has the manifests,
 the one-time setup and the `just` recipes for deploying by hand. [`DEPLOY.md`](DEPLOY.md) explains the setup, the
 decisions behind it and what is left to do.
+
+- MetaOS runs as two pods, so one answers while the other restarts or rolls out. Nothing may live in one pod's memory
+  that another needs: MCP is stateless (`spring.ai.mcp.server.protocol=STATELESS`, no `Mcp-Session-Id`), as no tool
+  needs a session and the bearer token says who's calling; every pod listens for changes (Live updates) and checks its
+  connections; caches like `DropboxFolderIndex` are each pod's own. Flyway takes a lock, so both may start at once.
 
 [Ogrodje]: https://ogrodje.si
 [Nix]: https://nixos.org/

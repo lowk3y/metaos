@@ -151,13 +151,11 @@ class Images(
      * The picture at [path] in a place in Dropbox or Koofr, or at a [URL][ImageSource.URL] (in [path]), in the public
      * bucket. A URL's picture is named after its last part, unless it has a [name], e.g. Hygraph's, whose URLs have none.
      */
-    fun publish(source: ImageSource, place: String?, path: String, name: String? = null): Image {
+    fun publish(source: ImageSource, place: String?, path: String, name: String? = null): Image = making.withLock {
+        // Fetched only once it's its turn, so pictures asked for at once wait rather than all be in memory together
         val fetched = fetch(source, place, path, name)
         val sha256 = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(fetched.bytes))
-        images.findBySha256(sha256)?.let { return it }
-        return making.withLock {
-            images.findBySha256(sha256) ?: images.save(make(sha256, source, fetched))
-        }
+        images.findBySha256(sha256) ?: images.save(make(sha256, source, fetched))
     }
 
     fun toDto(image: Image) = ImageDto(
