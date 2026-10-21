@@ -11,6 +11,8 @@
   // The logo's pink, for marks: 3.7:1 on white is too little for text, for which there's --accent-text (5.7:1)
   --accent: #EC4870;
   --accent-text: #C02A55;
+  // Behind the words a search found
+  --mark: #FCE1E9;
 
   --font-sans: 'Inter Variable', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -62,6 +64,13 @@ a {
 
 button {
   font: inherit;
+}
+
+// The words a search found
+mark {
+  background: var(--mark);
+  color: inherit;
+  border-radius: 2px;
 }
 
 // A quiet outlined button, for <button>s and links that act as one

@@ -1,15 +1,20 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
+import MarkedText from '@/components/MarkedText.vue'
 import SocialLinks from '@/components/SocialLinks.vue'
 import { episodePath } from '@/episodes'
-import { type Person, rolesOf, socialLinks } from '@/people'
+import { type Person, personPath, rolesOf, socialLinks } from '@/people'
 import { useAuthStore } from '@/stores/auth'
 
-// Signed in, their episodes lead to the episodes' pages
+// Signed in, their name leads to their page, and their episodes to the episodes' pages
 const auth = useAuthStore()
 
-const props = defineProps<{ person: Person }>()
+const props = defineProps<{
+  person: Person
+  // Found by a search: the words to mark
+  words?: string[]
+}>()
 
 // Their latest episodes by code, and how many more there are: hosts have dozens
 const LATEST = 3
@@ -25,8 +30,11 @@ const hasLinks = computed(() => socialLinks(props.person).length > 0)
 <template>
   <li class="person">
     <div class="main">
-      <p class="title">{{ person.name }}</p>
-      <p v-if="person.bio" class="summary">{{ person.bio }}</p>
+      <p class="title">
+        <RouterLink v-if="auth.authenticated" :to="personPath(person)"><MarkedText :text="person.name" :words="words"/></RouterLink>
+        <template v-else>{{ person.name }}</template>
+      </p>
+      <p v-if="person.bio" class="summary"><MarkedText :text="person.bio" :words="words"/></p>
       <p v-if="person.episodes.length" class="details">
         <span class="roles">{{ roles }}</span>
         <!-- An episode without a code, e.g. an idea, by its title -->

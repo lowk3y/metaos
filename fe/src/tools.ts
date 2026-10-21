@@ -15,6 +15,14 @@ export interface ToolGroup {
 
 export const TOOL_GROUPS: ToolGroup[] = [
   {
+    id: 'search',
+    title: 'Search',
+    about: 'episodes, ideas, people and recording sessions at once',
+    tools: [
+      { name: 'search', description: 'Find episodes, people and sessions by a code, a name or words in their titles and summaries; a code finds its episode on its own' },
+    ],
+  },
+  {
     id: 'episodes',
     title: 'Episodes',
     about: 'from idea to release',

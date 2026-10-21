@@ -10,7 +10,7 @@ import java.util.UUID
 
 data class SessionDto(val id: UUID?, val date: LocalDate, val location: String?, val address: String?)
 
-private fun Session.toDto() = SessionDto(id, date, location, address)
+fun Session.toDto() = SessionDto(id, date, location, address)
 
 @Component
 class SessionsMCP(

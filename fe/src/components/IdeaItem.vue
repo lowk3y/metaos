@@ -5,6 +5,7 @@ import FileLinks from '@/components/FileLinks.vue'
 import MarkdownText from '@/components/MarkdownText.vue'
 import ShowBadge from '@/components/ShowBadge.vue'
 import { candidates, episodePath, formatDate, guests, type Idea, sessionPath } from '@/episodes'
+import { personPath } from '@/people'
 
 const props = defineProps<{ idea: Idea }>()
 
@@ -32,7 +33,7 @@ const hasFiles = computed(() =>
       <p class="details">
         <span v-if="idea.code" class="code">{{ idea.code }}</span>
         <span class="when">Added <time :datetime="idea.addedDate">{{ formatDate(idea.addedDate) }}</time></span>
-        <span v-if="idea.recommendedBy">Recommended by <span class="person">{{ idea.recommendedBy.name }}</span></span>
+        <span v-if="idea.recommendedBy">Recommended by <RouterLink class="person" :to="personPath(idea.recommendedBy)">{{ idea.recommendedBy.name }}</RouterLink></span>
         <!-- On one line, as a line break would show as a space before the separator -->
         <span v-if="recording" class="when">Recording <RouterLink v-if="idea.session" :to="sessionPath(idea.session)"><time :datetime="recording">{{ formatDate(recording) }}</time></RouterLink><time v-else :datetime="recording">{{ formatDate(recording) }}</time></span>
         <span v-if="guestNames" class="guests">{{ guestNames }}</span>

@@ -156,6 +156,9 @@ interface EpisodesRepository : JpaRepository<Episode, UUID> {
 
     fun findByRecommendedBy(person: Person): List<Episode>
 
+    @Query("select e from Episode e where e.recommendedBy = :person order by $LATEST_FIRST")
+    fun findLatestFirstByRecommendedBy(person: Person): List<Episode>
+
     // Soft-deleted episodes are hidden from JPA queries, so finding and restoring one takes native SQL
     @Query(
         "select id from episodes where code = :code and deleted_at is not null order by deleted_at desc limit 1",

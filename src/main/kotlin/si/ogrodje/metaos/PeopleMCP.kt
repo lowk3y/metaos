@@ -22,7 +22,7 @@ data class PersonDto(
 data class PersonEpisodeDto(val episodeId: UUID?, val code: String?, val title: String, val roles: List<Role>)
 data class CurrentUserDto(val username: String?, val email: String?, val emailVerified: Boolean, val person: PersonDto?)
 
-private fun Person.toDto() =
+fun Person.toDto() =
     PersonDto(id, name, email, bio, homepageUrl, linkedinUrl, twitterUrl, instagramUrl, facebookUrl)
 
 /** The user a token belongs to, with the person linked to them by verified email */

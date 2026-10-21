@@ -29,6 +29,17 @@ type Query {
     "A recording session by its ID; null if there's none. Needs a signed-in user."
     session(id: ID!): Session
 
+    "A person by their ID; null if there's none. Needs a signed-in user."
+    person(id: ID!): Person
+
+    """
+    Episodes (ideas too), people and recording sessions that match the text, the best first, at most limit of each (up
+    to 100). An episode code, however it's typed (S05E08, s5e8, 5x08), or an episode's ID finds that episode on its own,
+    and a season (S04) its episodes. Case and diacritics don't matter, and the start of a word is enough. Needs a
+    signed-in user.
+    """
+    search(text: String!, limit: Int! = 10): SearchResults!
+
     """
     Everyone, by name, with who they are and where they're online. Anyone not signed in gets only those on the released
     (PUBLISHED) episodes, as anything but a candidate.
@@ -251,10 +262,70 @@ type Person {
     released ones, without candidates.
     """
     episodes: [PersonEpisode!]!
+    "The episodes they recommended, the latest first. None without a signed-in user."
+    recommended: [Episode!]!
 }
 
 "An episode a person is on, with their roles in it"
 type PersonEpisode {
     episode: Episode!
     roles: [Role!]!
+}
+
+"""
+What a search found: the episode whose code or ID the text is, alone; a season's episodes; or the best matches of each
+kind, and how many there are in all
+"""
+type SearchResults {
+    episode: Episode
+    "The season the text names, e.g. 4 for S04, whose episodes the episodes are"
+    season: Int
+    episodes: [EpisodeHit!]!
+    people: [PersonHit!]!
+    sessions: [SessionHit!]!
+    "How many episodes match, also past the limit"
+    episodeCount: Int!
+    personCount: Int!
+    sessionCount: Int!
+}
+
+"An episode a search found"
+type EpisodeHit {
+    episode: Episode!
+    "Where it matched, the best first"
+    matchedIn: [SearchField!]!
+    """
+    The text it matched in when that's an alternative title or a summary, which its row wouldn't show otherwise: the
+    title, or the part of the summary around the match, as plain text
+    """
+    snippet: String
+}
+
+"A person a search found"
+type PersonHit {
+    person: Person!
+    matchedIn: [SearchField!]!
+}
+
+"A recording session a search found"
+type SessionHit {
+    session: Session!
+    matchedIn: [SearchField!]!
+}
+
+"Where a search matched: an episode's code, titles, people, show, summaries or session; a person's name or bio; a session's place, address or date"
+enum SearchField {
+    CODE
+    TITLE
+    ALTERNATIVE_TITLE
+    PEOPLE
+    SHOW
+    TINY_SUMMARY
+    SUMMARY
+    SESSION
+    NAME
+    BIO
+    LOCATION
+    ADDRESS
+    DATE
 }

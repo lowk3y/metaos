@@ -124,8 +124,9 @@ export interface Change {
   fields: FieldChange[]
 }
 
-/** A person, as an episode names who recommended it */
+/** A person, as an episode names who recommended it; their page is at their ID */
 export interface PersonName {
+  id: string
   name: string
 }
 

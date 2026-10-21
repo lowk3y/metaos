@@ -16,6 +16,7 @@ import {
   links, photosOf, roleName, sessionPath, sessionTitle,
 } from '@/episodes'
 import { errorMessage, graphql } from '@/graphql'
+import { personPath } from '@/people'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -37,7 +38,7 @@ watch([() => route.params.ref, () => auth.authenticated], async ([episodeRef, au
   try {
     const data = await graphql<{ episode: EpisodeDetails | null }>(`query ($ref: String!) {
       episode(ref: $ref) {
-        ${EPISODE_FIELDS} titleB titleC summary machineSummary addedDate recommendedBy { name } ${KOOFR_FIELDS} ${DROPBOX_FIELDS} ${ARTWORK_FIELDS}
+        ${EPISODE_FIELDS} titleB titleC summary machineSummary addedDate recommendedBy { id name } ${KOOFR_FIELDS} ${DROPBOX_FIELDS} ${ARTWORK_FIELDS}
         ${HISTORY_FIELDS}
       }
     }`, { ref: String(episodeRef) })
@@ -103,7 +104,7 @@ const photos = computed(() => (episode.value ? photosOf(episode.value.koofrFolde
           </div>
           <div v-if="episode.recommendedBy">
             <dt>Recommended by</dt>
-            <dd>{{ episode.recommendedBy.name }}</dd>
+            <dd><RouterLink :to="personPath(episode.recommendedBy)">{{ episode.recommendedBy.name }}</RouterLink></dd>
           </div>
           <div v-if="links(episode).length">
             <dt>Listen</dt>
@@ -134,7 +135,7 @@ const photos = computed(() => (episode.value ? photosOf(episode.value.koofrFolde
         </div>
         <ul class="rows">
           <li v-for="person in episode.people" :key="person.personId">
-            <span>{{ person.name }}</span>
+            <RouterLink :to="personPath({ id: person.personId })">{{ person.name }}</RouterLink>
             <span class="aside">{{ person.roles.map(roleName).join(', ') }}</span>
           </li>
         </ul>

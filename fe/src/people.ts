@@ -22,6 +22,11 @@ export interface Person {
   episodes: PersonEpisode[]
 }
 
+/** A person's page */
+export function personPath(person: Pick<Person, 'id'>) {
+  return `/people/${person.id}`
+}
+
 /** The fields of a Person, for a query */
 export const PERSON_FIELDS = `
   id name bio homepageUrl linkedinUrl twitterUrl instagramUrl facebookUrl

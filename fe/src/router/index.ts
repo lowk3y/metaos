@@ -21,6 +21,18 @@ const router = createRouter({
       name: 'people',
       component: () => import('../views/PeopleView.vue'),
     },
+    // A person's page, with every episode they're on, behind sign-in
+    {
+      path: '/people/:id',
+      name: 'person',
+      component: () => import('../views/PersonView.vue'),
+    },
+    // Everything a search finds, behind sign-in: where the header's search leads for all of it
+    {
+      path: '/search',
+      name: 'search',
+      component: () => import('../views/SearchView.vue'),
+    },
     // The episode ideas, behind sign-in
     {
       path: '/ideas',

@@ -133,12 +133,13 @@ data class KoofrPhotoDto(val place: String, val path: String, val name: String) 
     val url = koofrUrl(place, path.substringBeforeLast('/').ifEmpty { "/" })
 }
 
-// Everything about one episode or session, for its page. What isn't public is empty, or null, for anyone else, as an
-// episode or session can also be reached through the released episodes.
+// Everything about one episode, session or person, for its page. What isn't public is empty, or null, for anyone else,
+// as an episode, session or person can also be reached through the released episodes.
 @Controller
 class DetailsGraphQL(
     private val episodeRepository: EpisodesRepository,
     private val sessionRepository: SessionsRepository,
+    private val peopleRepository: PeopleRepository,
     private val history: History,
 ) {
 
@@ -149,6 +150,10 @@ class DetailsGraphQL(
     @QueryMapping
     @PreAuthorize(SIGNED_IN)
     fun session(@Argument id: UUID): Session? = sessionRepository.findByIdOrNull(id)
+
+    @QueryMapping
+    @PreAuthorize(SIGNED_IN)
+    fun person(@Argument id: UUID): Person? = peopleRepository.findByIdOrNull(id)
 
     @SchemaMapping(typeName = "Episode")
     fun machineSummary(episode: Episode): String? = episode.machineSummary.takeIf { signedIn() }
@@ -167,6 +172,11 @@ class DetailsGraphQL(
     @SchemaMapping(typeName = "Episode", field = "history")
     fun episodeHistory(episode: Episode): List<HistoryEntryDto> =
         if (signedIn()) history.of(checkNotNull(episode.id)) else emptyList()
+
+    // As who recommended an episode is
+    @SchemaMapping(typeName = "Person")
+    fun recommended(person: Person): List<Episode> =
+        if (signedIn()) episodeRepository.findLatestFirstByRecommendedBy(person) else emptyList()
 
     @SchemaMapping(typeName = "Session")
     fun address(session: Session): String? = session.address.takeIf { signedIn() }
@@ -319,7 +329,7 @@ data class EpisodeRolesDto(val episode: Episode, val roles: List<Role>)
 private val TITLE = Regex("^dr\\.\\s+", RegexOption.IGNORE_CASE)
 
 // By name as Slovenian sorts it (Č after C, ...), and dr. Matevž Pesek with the Ms
-private val byName: Comparator<Person> =
+val peopleByName: Comparator<Person> =
     Collator.getInstance(Locale.forLanguageTag("sl")).let { collator -> compareBy(collator) { it.name.replace(TITLE, "") } }
 
 // What anyone may see of who's on an episode: anything but a candidate, on a released one
@@ -335,7 +345,7 @@ class PeopleGraphQL(private val people: PeopleRepository, private val episodePeo
         val everyone = people.findAll()
         val listed = if (signedIn() || everyone.isEmpty()) everyone
         else episodePeople.findByPeopleWithEpisode(everyone).filter { it.isPublic() }.map { it.person }.distinct()
-        return listed.sortedWith(byName)
+        return listed.sortedWith(peopleByName)
     }
 
     // The episodes of all the people in an answer, in one query, the latest first
@@ -350,6 +360,15 @@ class PeopleGraphQL(private val people: PeopleRepository, private val episodePeo
                 .map { (episode, assignments) -> EpisodeRolesDto(episode, assignments.map { it.role }.sorted()) }
         }
     }
+}
+
+// Search is the team's, as most of what it finds is: ideas, candidates, sessions
+@Controller
+class SearchGraphQL(private val search: Search) {
+
+    @QueryMapping("search")
+    @PreAuthorize(SIGNED_IN)
+    fun find(@Argument text: String, @Argument limit: Int): SearchResults = search.search(text, limit)
 }
 
 /** require(...) failing, e.g. on an argument out of range, is the caller's mistake: its message goes back to them */

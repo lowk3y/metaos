@@ -2,9 +2,11 @@
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import FileLinks from '@/components/FileLinks.vue'
+import MarkedText from '@/components/MarkedText.vue'
 import ShowBadge from '@/components/ShowBadge.vue'
 import StatusLabel from '@/components/StatusLabel.vue'
 import { type Episode, episodePath, formatDate } from '@/episodes'
+import type { EpisodeMatch } from '@/search'
 import { useAuthStore } from '@/stores/auth'
 
 // Signed in, the title leads to the episode's page
@@ -14,6 +16,8 @@ const props = defineProps<{
   episode: Episode
   // Listed under its session's heading, which says when it's recorded unless the episode has a date of its own
   underSession?: boolean
+  // Found by a search: the words to mark, and why it was found when the row doesn't show it
+  match?: EpisodeMatch
 }>()
 
 // When it is or was recorded
@@ -24,16 +28,20 @@ const date = computed(() => {
 })
 </script>
 
-<!-- An episode in the works, on one line: the code, title and show, then its status, when it's recorded and its files.
-     Released episodes have a fuller row of their own, EpisodeItem. -->
+<!-- An episode in the works, on one line: the code, title and show, then its status, when it's recorded and its files;
+     found by a search, under the title what it was found by. Released episodes have a fuller row of their own,
+     EpisodeItem. -->
 <template>
   <li class="episode">
     <span class="code" :aria-hidden="!episode.code">{{ episode.code ?? '—' }}</span>
-    <p class="title">
-      <RouterLink v-if="auth.authenticated" :to="episodePath(episode)" lang="sl">{{ episode.title }}</RouterLink>
-      <span v-else lang="sl">{{ episode.title }}</span>
-      <ShowBadge v-if="episode.show" :name="episode.show" :color="episode.showColor"/>
-    </p>
+    <div class="main">
+      <p class="title">
+        <RouterLink v-if="auth.authenticated" :to="episodePath(episode)" lang="sl"><MarkedText :text="episode.title" :words="match?.words"/></RouterLink>
+        <span v-else lang="sl">{{ episode.title }}</span>
+        <ShowBadge v-if="episode.show" :name="episode.show" :color="episode.showColor"/>
+      </p>
+      <p v-if="match?.text" class="found"><span class="label">{{ match.label }}</span> <span lang="sl"><MarkedText :text="match.text" :words="match.words"/></span></p>
+    </div>
     <span class="meta">
       <StatusLabel :status="episode.status"/>
       <time v-if="date" class="date" :datetime="date">{{ formatDate(date) }}</time>
@@ -61,6 +69,18 @@ const date = computed(() => {
   .show {
     margin-left: 10px;
     vertical-align: 1px;
+  }
+}
+
+// Why a search found it
+.found {
+  margin-top: 2px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--secondary);
+
+  .label {
+    color: var(--muted);
   }
 }
 
@@ -101,7 +121,7 @@ const date = computed(() => {
     grid-area: code;
   }
 
-  .title {
+  .main {
     grid-area: title;
   }
 

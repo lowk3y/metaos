@@ -22,7 +22,7 @@ watch(() => auth.authenticated, async (authenticated) => {
   error.value = undefined
   if (!authenticated) return
   try {
-    const data = await graphql<{ ideas: Idea[] }>(`{ ideas { ${EPISODE_FIELDS} addedDate recommendedBy { name } } }`)
+    const data = await graphql<{ ideas: Idea[] }>(`{ ideas { ${EPISODE_FIELDS} addedDate recommendedBy { id name } } }`)
     if (load === loads) ideas.value = data.ideas
   } catch (e) {
     if (load === loads) error.value = errorMessage(e)

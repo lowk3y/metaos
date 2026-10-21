@@ -4,6 +4,7 @@ import {RouterLink, RouterView} from 'vue-router'
 import {faDiscord, faGithub, faGoogle} from '@fortawesome/free-brands-svg-icons'
 import {faArrowRightFromBracket} from '@fortawesome/free-solid-svg-icons'
 import {FontAwesomeIcon} from '@fortawesome/vue-fontawesome'
+import SearchPalette from '@/components/SearchPalette.vue'
 import {graphql} from '@/graphql'
 import {useAuthStore} from '@/stores/auth'
 
@@ -46,7 +47,9 @@ watch(() => auth.authenticated, async (authenticated) => {
       </nav>
 
       <div v-if="auth.ready" class="auth">
+        <!-- Search is the team's, as most of what it finds is -->
         <template v-if="auth.authenticated">
+          <SearchPalette/>
           <span class="name">{{ name }}</span>
           <button type="button" class="button" @click="auth.logout()">
             <FontAwesomeIcon :icon="faArrowRightFromBracket"/>Sign out
