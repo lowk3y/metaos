@@ -6,6 +6,13 @@ plugins {
     id("org.jetbrains.kotlin.plugin.spring") version "2.4.21"
 }
 
+// Spring Boot 4.1.1 manages Tomcat 11.0.24 and Jackson 3.1.5 / 2.21.5, which have known advisories: Tomcat's
+// CVE-2026-65905, -65182 and -68525, and Jackson's parser denial of service (CVE-2026-89407, -89425 and others).
+// Drop these once a Boot release manages these versions or later.
+extra["tomcat.version"] = "11.0.27"
+extra["jackson-bom.version"] = "3.1.8"
+extra["jackson-2-bom.version"] = "2.21.8"
+
 group = "si.ogrodje.metaos"
 version = "0.0.1"
 
