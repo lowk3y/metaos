@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
+import { type Account, ACCOUNT_FIELDS } from '@/accounts'
 import { keepUnchanged, useLiveRefresh } from '@/changes'
 import EpisodeItem from '@/components/EpisodeItem.vue'
 import EpisodeRow from '@/components/EpisodeRow.vue'
@@ -8,6 +9,7 @@ import LoadError from '@/components/LoadError.vue'
 import LoadingRows from '@/components/LoadingRows.vue'
 import NotFound from '@/components/NotFound.vue'
 import PersonAvatar from '@/components/PersonAvatar.vue'
+import PersonSignIns, { type MyAccount } from '@/components/PersonSignIns.vue'
 import SignInPrompt from '@/components/SignInPrompt.vue'
 import SocialLinks from '@/components/SocialLinks.vue'
 import { type Episode, EPISODE_FIELDS, type Role, roleName } from '@/episodes'
@@ -17,10 +19,11 @@ import { type Person, rolesOf, socialLinks } from '@/people'
 import { useAuthStore } from '@/stores/auth'
 import { usePageTitle } from '@/title'
 
-/** A person with everything about them, for their page: their episodes whole, and those they recommended */
-interface PersonDetails extends Omit<Person, 'episodes'> {
+/** A person with everything about them, for their page: their episodes whole, those they recommended, and their sign-ins */
+interface PersonDetails extends Omit<Person, 'episodes' | 'accounts'> {
   episodes: { episode: Episode, roles: Role[] }[]
   recommended: Episode[]
+  accounts: Account[]
 }
 
 const auth = useAuthStore()
@@ -29,6 +32,9 @@ const route = useRoute()
 // Undefined while it loads; null when there's no such person
 const person = ref<PersonDetails | null>()
 const error = ref<string>()
+// Your account, which may say this person is you, and whether you may link accounts to people
+const me = ref<MyAccount | null>()
+const canLinkAccounts = ref(false)
 
 // Only the latest load counts: an earlier one may answer after it
 let loads = 0
@@ -42,15 +48,22 @@ async function loadPerson(id: string, quietly = false) {
   }
   if (!auth.authenticated) return
   try {
-    const data = await graphql<{ person: PersonDetails | null }>(`query ($id: ID!) {
+    const data = await graphql<{
+      person: PersonDetails | null
+      me: { account: MyAccount | null, canLinkAccounts: boolean } | null
+    }>(`query ($id: ID!) {
       person(id: $id) {
         id name bio homepageUrl linkedinUrl twitterUrl instagramUrl facebookUrl avatar { ${IMAGE_FIELDS} }
         episodes { episode { ${EPISODE_FIELDS} } roles }
         recommended { ${EPISODE_FIELDS} }
+        accounts { ${ACCOUNT_FIELDS} }
       }
+      me { account { id username name email person { id } } canLinkAccounts }
     }`, { id })
     if (load !== loads) return
     person.value = keepUnchanged(person.value, data.person)
+    me.value = keepUnchanged(me.value, data.me?.account ?? null)
+    canLinkAccounts.value = data.me?.canLinkAccounts === true
     error.value = undefined
   } catch (e) {
     if (load !== loads) return
@@ -64,6 +77,11 @@ watch([() => route.params.id, () => auth.authenticated], ([id]) => void loadPers
 useLiveRefresh(() => loadPerson(String(route.params.id), true))
 
 usePageTitle(() => person.value?.name)
+
+// After a link or an unlink, as the Discussion does after a comment
+function reloadQuietly() {
+  loadPerson(String(route.params.id), true).catch((e) => console.error('The person did not load again', e))
+}
 
 // In the order an episode's people are listed
 const ROLES: Role[] = ['HOST', 'CO_HOST', 'GUEST', 'PRODUCER', 'CONSULTANT', 'DESIGNER', 'CANDIDATE']
@@ -87,7 +105,8 @@ const hasLinks = computed(() => (person.value ? socialLinks(person.value).length
   <main class="content">
     <SignInPrompt v-if="auth.ready && !auth.authenticated" title="Sign in to see this person">
       A person's page, with every episode they're on, is for Ogrodje's team. Sign in with Discord or Google, or use
-      MetaOS from your AI assistant over MCP: Usage shows how to connect it.
+      MetaOS from your AI assistant over MCP:
+      <RouterLink class="usage" to="/usage">API and MCP usage</RouterLink> shows how to connect it.
     </SignInPrompt>
     <LoadError v-else-if="error" what="The person" :error="error" @retry="loadPerson(String(route.params.id))"/>
     <NotFound v-else-if="person === null" title="There's no such person">
@@ -127,6 +146,8 @@ const hasLinks = computed(() => (person.value ? socialLinks(person.value).length
         </dl>
       </section>
 
+      <PersonSignIns :person="person" :accounts="person.accounts" :me="me" :can-link="canLinkAccounts" @changed="reloadQuietly"/>
+
       <p v-if="!byRole.length && !person.recommended.length" class="note">Not on any episode yet.</p>
 
       <!-- Each as the other lists have it: a line while it's in the works, its summary once it's released -->
@@ -161,6 +182,15 @@ const hasLinks = computed(() => (person.value ? socialLinks(person.value).length
 
 <style scoped lang="scss">
 @use '../assets/page';
+
+// API and MCP usage, which is in the footer, from the sign-in prompt's words
+.usage {
+  color: var(--accent-text);
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
 
 // Their picture beside who they are
 .person {
