@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, useId } from 'vue'
+import { computed, nextTick, ref, useId } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { faCopy } from '@fortawesome/free-regular-svg-icons'
 import { faArrowDown, faCheck, faCode, faKey, faMagnifyingGlass, faRobot } from '@fortawesome/free-solid-svg-icons'
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
+import { useRuntimeConfig } from '#imports'
 import CopyCommand from '@/components/CopyCommand.vue'
 import MarkedText from '@/components/MarkedText.vue'
 import { errorMessage } from '@/graphql'
 import { searchWords } from '@/search'
+import { usePageMeta } from '@/seo'
 import { useAuthStore } from '@/stores/auth'
 import { TOOL_GROUPS } from '@/tools'
 import { type Client, CLIENTS, clientFrom, curlCommand, filterTools, tabAfter, toolCount, withTimeout } from '@/usage'
@@ -20,18 +22,13 @@ const route = useRoute()
 const router = useRouter()
 const id = useId()
 
-// Where MCP clients connect, from /config.json (Frontend.kt): this page's own origin until it answers, which is right
-// wherever MetaOS serves the front-end itself, but not on Vite's dev server
-const mcpUrl = ref(`${location.origin}/mcp`)
+// Where MCP clients connect, and the site, from the runtime config (nuxt.config.ts), so the server's page says them too
+const { mcpUrl, siteUrl } = useRuntimeConfig().public
 
-onMounted(async () => {
-  try {
-    const config: { mcpUrl?: string } = await (await fetch('/config.json')).json()
-    if (config.mcpUrl) mcpUrl.value = config.mcpUrl
-  } catch (error) {
-    console.error('MetaOS did not say where MCP clients connect', error)
-  }
-})
+usePageMeta(() => ({
+  description: 'Use MetaOS from your AI assistant over MCP: how to connect Claude Code, Claude, Codex or ChatGPT, and '
+    + 'what it can do.',
+}))
 
 // The assistant whose steps are shown, kept in the address (?client=), as search keeps what's searched
 const client = computed(() => clientFrom(route.query.client))
@@ -55,13 +52,13 @@ function onTabKeydown(event: KeyboardEvent, index: number) {
 }
 
 // For all of the user's projects, not only the one they happen to be in
-const claudeCommand = computed(() => `claude mcp add --transport http --scope user ogrodje ${mcpUrl.value}`)
+const claudeCommand = computed(() => `claude mcp add --transport http --scope user ogrodje ${mcpUrl}`)
 // Codex's config.toml is the user's own (~/.codex), so it's in all their projects, and the IDE extension's too
-const codexCommand = computed(() => `codex mcp add ogrodje --url ${mcpUrl.value}`)
+const codexCommand = computed(() => `codex mcp add ogrodje --url ${mcpUrl}`)
 const codexLogin = 'codex mcp login ogrodje'
 
-// MetaOS's GraphQL API, on this page's own origin, as MetaOS serves both (GraphQL.kt, schema.graphqls)
-const graphqlUrl = `${location.origin}/graphql`
+// MetaOS's GraphQL API, on the site's own origin, where the Ingress sends it to MetaOS (GraphQL.kt, schema.graphqls)
+const graphqlUrl = `${siteUrl}/graphql`
 const SCHEMA_URL = 'https://github.com/ogrodje/metaos/blob/master/src/main/resources/graphql/schema.graphqls'
 
 const publicCommand = curlCommand(graphqlUrl, { query: '{ releasedEpisodes(limit: 3) { code title airedDate youtubeUrl } }' })

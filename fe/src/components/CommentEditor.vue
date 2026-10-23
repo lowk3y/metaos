@@ -37,7 +37,8 @@ const previewTab = ref<HTMLButtonElement>()
 // As tall as the text was, so the box doesn't jump when it's previewed
 const previewHeight = ref<number>()
 
-const mac = /Mac|iPhone|iPad/.test(navigator.userAgent)
+// Known once it's in the browser, as the server doesn't know whose it is
+const mac = ref(false)
 
 // What will be posted, as MetaOS keeps it
 const preview = computed(() => commentText(text.value))
@@ -84,6 +85,7 @@ watch(text, (value) => {
 })
 
 onMounted(() => {
+  mac.value = /Mac|iPhone|iPad/.test(navigator.userAgent)
   if (!props.autofocus || !textarea.value) return
   textarea.value.focus()
   textarea.value.setSelectionRange(text.value.length, text.value.length)

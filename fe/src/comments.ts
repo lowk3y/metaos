@@ -92,10 +92,14 @@ export function lengthNote(body: string): { text: string, over: boolean } | null
 /** What a key does in a comment box, as on GitHub */
 export type EditorShortcut = 'submit' | 'switch'
 
-/** ⌘↵ or Ctrl+↵ sends the comment, from Write or Preview; Ctrl+Shift+P (⌘⇧P) switches between them */
-export function editorShortcut(
-  event: Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'isComposing'>,
-): EditorShortcut | null {
+/**
+ * ⌘↵ or Ctrl+↵ sends the comment, from Write or Preview; Ctrl+Shift+P (⌘⇧P) switches between them. The event as a
+ * KeyboardEvent has it, without the DOM's types, which the server's code (fe/server) doesn't have and gets this file
+ * through episodes.ts.
+ */
+export function editorShortcut(event: {
+  key: string, metaKey: boolean, ctrlKey: boolean, shiftKey: boolean, altKey: boolean, isComposing: boolean
+}): EditorShortcut | null {
   // While an input method composes, its keys are its own
   if (event.isComposing || event.altKey || !(event.metaKey || event.ctrlKey)) return null
   if (event.key === 'Enter') return 'submit'
