@@ -161,6 +161,7 @@ const folder = computed(() => props.artwork[0]?.url)
 
 <style scoped lang="scss">
 @use '../assets/heading';
+@use '../assets/pictures';
 
 .heading {
   flex-wrap: wrap;
@@ -215,9 +216,7 @@ const folder = computed(() => props.artwork[0]?.url)
 
 .hero {
   display: block;
-  overflow: hidden;
-  border-radius: 10px;
-  background: var(--hover);
+  @include pictures.picture;
 
   img {
     display: block;
@@ -248,10 +247,8 @@ const folder = computed(() => props.artwork[0]?.url)
 .shot {
   position: relative;
   display: block;
-  overflow: hidden;
   aspect-ratio: 16 / 9;
-  border-radius: 8px;
-  background: var(--hover);
+  @include pictures.picture;
 
   img {
     display: block;
@@ -264,7 +261,9 @@ const folder = computed(() => props.artwork[0]?.url)
     aspect-ratio: 1;
   }
 
+  // A place to upload one: dashed, rather than the edge of a picture
   &.missing {
+    outline: 0;
     display: grid;
     width: 100%;
     font: inherit;

@@ -117,6 +117,7 @@ onBeforeUnmount(release)
 
 <style scoped lang="scss">
 @use '../assets/heading';
+@use '../assets/pictures';
 
 .heading {
   flex-wrap: wrap;
@@ -188,9 +189,7 @@ onBeforeUnmount(release)
   .tile {
     display: block;
     aspect-ratio: 3 / 2;
-    overflow: hidden;
-    background: var(--hover);
-    border-radius: 8px;
+    @include pictures.picture;
   }
 
   img {

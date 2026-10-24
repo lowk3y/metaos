@@ -34,11 +34,16 @@ const initials = computed(() => {
 </template>
 
 <style scoped lang="scss">
+@use '../assets/pictures';
+
+// Round, as people are everywhere (pictures.scss)
 .avatar {
   display: block;
   flex: none;
   object-fit: cover;
-  background: var(--hover);
+  background: pictures.$empty;
+  border-radius: 50%;
+  @include pictures.edge;
 }
 
 .initials {

@@ -190,7 +190,7 @@ const hasLinks = computed(() => (person.value ? socialLinks(person.value).length
 
     <template v-else>
       <header class="person">
-        <PersonAvatar :image="person.avatar" :name="person.name" :size="88"/>
+        <PersonAvatar :image="person.avatar" :name="person.name" :size="96"/>
         <div class="title">
           <p class="kicker">{{ person.episodes.length ? rolesOf(person) : 'Person' }}</p>
           <h1>{{ person.name }}</h1>

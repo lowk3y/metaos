@@ -506,6 +506,8 @@ defineExpose({ open })
 </template>
 
 <style scoped lang="scss">
+@use '../assets/pictures';
+
 kbd {
   display: inline-block;
   min-width: 20px;
@@ -719,9 +721,7 @@ kbd {
   width: 128px;
   max-width: 100%;
   aspect-ratio: 16 / 9;
-  overflow: hidden;
-  background: var(--hover);
-  border-radius: 6px;
+  @include pictures.picture($small: true);
 
   &.square {
     width: 72px;
@@ -736,6 +736,7 @@ kbd {
   }
 
   &.empty {
+    outline: 0;
     background: #FFFFFF;
     border: 1.5px dashed #CFCFCF;
   }

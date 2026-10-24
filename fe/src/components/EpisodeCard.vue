@@ -22,7 +22,7 @@ const guestNames = computed(() => guests(props.episode).join(', '))
       <img v-if="episode.thumbnail" :src="src(episode.thumbnail, 640)" :srcset="srcset(episode.thumbnail)"
            sizes="(max-width: 640px) 128px, 280px" :width="episode.thumbnail.width" :height="episode.thumbnail.height"
            alt="" loading="lazy">
-      <span v-else class="blank" :style="{ '--show': episode.showColor ?? 'var(--hairline)' }">{{ episode.code }}</span>
+      <span v-else class="blank">{{ episode.code }}</span>
     </RouterLink>
     <div class="text">
       <p class="meta">
@@ -38,6 +38,7 @@ const guestNames = computed(() => guests(props.episode).join(', '))
 </template>
 
 <style scoped lang="scss">
+@use '../assets/pictures';
 
 .episode-card {
   display: grid;
@@ -48,10 +49,8 @@ const guestNames = computed(() => guests(props.episode).join(', '))
 
 .shot {
   display: block;
-  overflow: hidden;
   aspect-ratio: 16 / 9;
-  background: var(--hover);
-  border-radius: 8px;
+  @include pictures.picture;
 
   img {
     display: block;
@@ -66,7 +65,7 @@ const guestNames = computed(() => guests(props.episode).join(', '))
   }
 }
 
-// Without a thumbnail: its code, and its show's colour at the side
+// Without a thumbnail: its code, on the grey of a picture that isn't there
 .blank {
   display: grid;
   place-items: center;
@@ -74,8 +73,6 @@ const guestNames = computed(() => guests(props.episode).join(', '))
   font-family: var(--font-mono);
   font-size: 13px;
   color: var(--muted);
-  background: linear-gradient(135deg, #F7F7F7, #EFEFEF);
-  box-shadow: inset 4px 0 0 var(--show);
 }
 
 .text {
@@ -120,9 +117,6 @@ const guestNames = computed(() => guests(props.episode).join(', '))
     border-top: 1px solid var(--rule);
   }
 
-  .shot {
-    border-radius: 6px;
-  }
 
   .title {
     font-size: 14px;

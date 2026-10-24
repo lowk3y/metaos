@@ -32,6 +32,7 @@ function toTop() {
 </template>
 
 <style scoped lang="scss">
+@use '../assets/pictures';
 
 // Closed, as tall as nothing, until it's shown: then it opens to its height and fades in
 .panel-title {
@@ -87,7 +88,7 @@ function toTop() {
     width: 40px;
     height: 40px;
     object-fit: cover;
-    border-radius: 6px;
+    @include pictures.picture($small: true);
   }
 }
 

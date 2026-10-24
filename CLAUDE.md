@@ -59,7 +59,7 @@ yarn test       # the tests in src/**/__tests__, with vitest (./gradlew feTest, 
 - The pages anyone may see (Home, Episodes, People, an episode's and a person's page, Usage) render on the server, as
   someone who isn't signed in sees them: the server asks the API without a token (`graphql.ts`), so every visitor gets
   the same page, which Nitro and Cloudflare keep for a minute and serve stale for ten while it's rendered again
-  (`routeRules`). A page's data comes in it (`useFirstLoad` in [`fe/src/ssr.ts`](fe/src/ssr.ts), over `useAsyncData`;
+  (`routeRules`); not in development, where Nitro's cache (`.nuxt/cache`) would outlive a restart of the dev server. A page's data comes in it (`useFirstLoad` in [`fe/src/ssr.ts`](fe/src/ssr.ts), over `useAsyncData`;
   not in a `_payload.json` of its own, which a cache could keep apart from its page), and the browser hydrates it
   rather than loading it again. Going to a page in the browser, it loads there, as the signed-in user.
 - keycloak-js starts once the page is hydrated ([`fe/src/plugins/auth.client.ts`](fe/src/plugins/auth.client.ts)), and
@@ -117,6 +117,10 @@ yarn test       # the tests in src/**/__tests__, with vitest (./gradlew feTest, 
   `fold`, and `ChipGroup`s), and keep their filters and view in the address (`useQueryState`, `fe/src/query.ts`), so
   a link keeps them and the server renders them. What they filter and group by is in
   [`fe/src/lists.ts`](fe/src/lists.ts), with tests, and happens in the browser on what's loaded.
+- Pictures follow one set of rules ([`_pictures.scss`](fe/src/assets/_pictures.scss)): people round (`PersonAvatar`),
+  things (episodes' pictures, artwork, photos) rounded, 6 px up to 56 px across and 8 px above, with a hairline edge
+  inside; sizes from one scale (24, 32, 40, 56, 72, 96 px, and the grids' widths); a picture that isn't there is the
+  same grey, with a card's code on it; dashed only where the team uploads one (Media, `ArtworkUpload`).
 - Every page is in one frame, 1200 px wide (`--content-width`), the header's and the footer's too, so they don't jump
   between pages; running text keeps a measure of its own (`MarkdownText.vue`'s 680 px). The width goes to side panels,
   grids and tables.

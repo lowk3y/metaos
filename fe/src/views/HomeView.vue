@@ -243,6 +243,7 @@ usePageMeta(() => ({
 
 <style scoped lang="scss">
 @use '../assets/page';
+@use '../assets/pictures';
 
 // API and MCP usage, which is in the footer, from the sign-in prompt's words
 .usage {
@@ -286,10 +287,8 @@ usePageMeta(() => ({
 
   .shot {
     display: block;
-    overflow: hidden;
     aspect-ratio: 1;
-    background: var(--hover);
-    border-radius: 6px;
+    @include pictures.picture($small: true);
 
     img {
       display: block;

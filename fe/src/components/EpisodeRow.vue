@@ -74,6 +74,7 @@ const guestNames = computed(() => (released.value ? guests(props.episode).join('
 
 <style scoped lang="scss">
 @use '../assets/episode';
+@use '../assets/pictures';
 
 // Status and date in columns of their own, which line up from row to row
 .episode {
@@ -108,10 +109,8 @@ const guestNames = computed(() => (released.value ? guests(props.episode).join('
 
 .thumbnail {
   display: block;
-  overflow: hidden;
   aspect-ratio: 1;
-  background: var(--hover);
-  border-radius: 4px;
+  @include pictures.picture($small: true);
 
   img {
     display: block;

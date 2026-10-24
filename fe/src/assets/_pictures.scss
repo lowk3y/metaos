@@ -1,0 +1,24 @@
+// Pictures, the same wherever they are: people round, and things (episodes' pictures, artwork, photos) rounded, 6 px up
+// to 56 px across and 8 px above; a hairline edge inside each, so a light one keeps its shape on the page; and one grey
+// for a picture that isn't there. Sizes come from one scale: 24, 32, 40, 56, 72 and 96 px, and the grids' widths.
+
+// Up to 56 px across, e.g. a list's row, Home's releases, the panel's title card
+$small-radius: 6px;
+// Anything larger, e.g. cards, Media, photos
+$radius: 8px;
+// A picture that isn't there
+$empty: #F1F1F1;
+
+// A hairline inside the picture, over it, which follows its corners
+@mixin edge {
+  outline: 1px solid rgba(0, 0, 0, 0.08);
+  outline-offset: -1px;
+}
+
+// A thing's picture, or its place while it has none: small ones with the small radius
+@mixin picture($small: false) {
+  overflow: hidden;
+  background: $empty;
+  border-radius: if($small, $small-radius, $radius);
+  @include edge;
+}
