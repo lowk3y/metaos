@@ -200,7 +200,15 @@ class DetailsGraphQL(
     @SchemaMapping(typeName = "Session", field = "history")
     fun sessionHistory(session: Session): List<HistoryEntryDto> =
         if (signedIn()) history.of(checkNotNull(session.id)) else emptyList()
+
+    // What the team did lately, as the episodes', sessions' and people's histories tell it, e.g. for the home page
+    @QueryMapping
+    @PreAuthorize(SIGNED_IN)
+    fun recentChanges(@Argument limit: Int): List<HistoryEntryDto> = history.recent(limit.coerceIn(1, MAX_RECENT_CHANGES))
 }
+
+// The most changes recentChanges answers with
+private const val MAX_RECENT_CHANGES = 200
 
 // Koofr folders are the team's too, so others get none. Lists of episodes have them as well, so they're batched, and
 // Koofr itself, slower than the database, is only asked for what a query wants: place names and photos.
@@ -379,7 +387,11 @@ class PeopleGraphQL(private val people: PeopleRepository, private val episodePeo
 // Pictures are anyone's who may see the episode or person, but for the thumbnails that go with the alternative titles,
 // which are the team's, as the titles are. Lists of episodes and people have them as well, so they're batched.
 @Controller
-class ImagesGraphQL(private val imagesRepository: ImagesRepository, private val images: ObjectProvider<Images>) {
+class ImagesGraphQL(
+    private val imagesRepository: ImagesRepository,
+    private val images: ObjectProvider<Images>,
+    private val people: PeopleRepository,
+) {
 
     @BatchMapping(typeName = "Episode", field = "thumbnail")
     fun thumbnails(episodes: List<Episode>) = of(episodes) { it.thumbnailImageId }
@@ -390,11 +402,21 @@ class ImagesGraphQL(private val imagesRepository: ImagesRepository, private val 
     @BatchMapping(typeName = "Episode", field = "thumbnailC")
     fun thumbnailsC(episodes: List<Episode>) = if (signedIn()) of(episodes) { it.thumbnailCImageId } else emptyMap()
 
+    @BatchMapping(typeName = "Episode", field = "web")
+    fun webs(episodes: List<Episode>) = of(episodes) { it.webImageId }
+
     @BatchMapping(typeName = "Episode", field = "cover")
     fun covers(episodes: List<Episode>) = of(episodes) { it.coverImageId }
 
     @BatchMapping(typeName = "Person", field = "avatar")
     fun avatars(people: List<Person>) = of(people) { it.avatarImageId }
+
+    // Who's on an episode, with their pictures, e.g. on its page; whoever may see them there may see their avatars
+    @BatchMapping(typeName = "EpisodePerson", field = "avatar")
+    fun episodePeopleAvatars(onEpisodes: List<EpisodePersonDto>): Map<EpisodePersonDto, ImageDto> {
+        val avatars = people.findAllById(onEpisodes.mapNotNull { it.personId }.toSet()).associate { it.id to it.avatarImageId }
+        return of(onEpisodes) { avatars[it.personId] }
+    }
 
     // None while the public bucket is off; those without one are left out, and so null
     private fun <T : Any> of(items: List<T>, imageId: (T) -> UUID?): Map<T, ImageDto> {
