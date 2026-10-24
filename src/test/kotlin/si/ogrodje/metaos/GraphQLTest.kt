@@ -2,6 +2,7 @@ package si.ogrodje.metaos
 
 import com.jayway.jsonpath.JsonPath
 import graphql.introspection.IntrospectionQuery
+import org.hamcrest.Matchers.anyOf
 import org.hamcrest.Matchers.contains
 import org.hamcrest.Matchers.containsString
 import org.hamcrest.Matchers.empty
@@ -81,7 +82,7 @@ class GraphQLTest @Autowired constructor(
 
         graphql(
             """{ episode(ref: "gq-h1") { title titleB titleC summary tinySummary machineSummary addedDate koofrFolders { path url }
-                 history { actor tool summary fields { field from to } } } }""",
+                 history { actor tool kind summary fields { field from to } } } }""",
             reader,
         )
             .andExpect(jsonPath("$.errors").doesNotExist())
@@ -96,6 +97,7 @@ class GraphQLTest @Autowired constructor(
                 "Created the episode", "Changed the episode", "Added History Host as host",
                 "Linked the Koofr folder /Epizode/S05E04 - Jure in Jošt (SAP)",
             )))
+            .andExpect(jsonPath("$.data.episode.history[*].kind", contains("EPISODE", "EPISODE", "PERSON", "KOOFR_FOLDER")))
             .andExpect(jsonPath("$.data.episode.history[0].actor").value("ana"))
             .andExpect(jsonPath("$.data.episode.history[0].tool").value("create_episode"))
             .andExpect(jsonPath("$.data.episode.history[1].fields[*].field", contains("Title", "Title B", "Summary", "Tiny summary", "AI summary")))
@@ -117,12 +119,13 @@ class GraphQLTest @Autowired constructor(
             checkNotNull(session.id)
         }
 
-        graphql("""{ session(id: "$sessionId") { location address episodes { code } history { summary fields { field to } } } }""", reader)
+        graphql("""{ session(id: "$sessionId") { location address episodes { code } history { kind summary fields { field to } } } }""", reader)
             .andExpect(jsonPath("$.errors").doesNotExist())
             .andExpect(jsonPath("$.data.session.address").value("Hidden street 1"))
             .andExpect(jsonPath("$.data.session.episodes[*].code", contains("gq-h2", "gq-h3")))
             .andExpect(jsonPath("$.data.session.history[*].summary",
                 contains("Created the session", "Added gq-h3 to the session", "Added gq-h2 to the session")))
+            .andExpect(jsonPath("$.data.session.history[*].kind", contains("SESSION", "EPISODE", "EPISODE")))
             .andExpect(jsonPath("$.data.session.history[0].fields[*].to", contains("1 Jul 2099", "History Hall", "Hidden street 1")))
     }
 
@@ -319,6 +322,31 @@ class GraphQLTest @Autowired constructor(
         graphql(query)
             .andExpect(jsonPath("$.errors").doesNotExist())
             .andExpect(jsonPath("$.data.episodes[?(@.code == 'gq-c1')].people[*].name", contains("Confirmed Guest")))
+    }
+
+    @Test
+    fun `tells signed-in users the latest changes, oldest first, each with what it's a change to`() {
+        asMcpUser {
+            episodesMCP.create(code = "gq-rc1", title = "Recently made")
+            val guest = checkNotNull(peopleMCP.create(name = "Recent Guest", email = null).id)
+            episodesMCP.assignPerson("gq-rc1", guest, Role.GUEST)
+        }
+
+        graphql("""{ recentChanges(limit: 3) { actor tool kind summary about { kind name code } } }""", reader)
+            .andExpect(jsonPath("$.errors").doesNotExist())
+            .andExpect(jsonPath("$.data.recentChanges[*].summary",
+                contains("Created the episode", "Created the person", "Added Recent Guest as guest")))
+            .andExpect(jsonPath("$.data.recentChanges[*].kind", contains("EPISODE", "PERSON", "PERSON")))
+            .andExpect(jsonPath("$.data.recentChanges[*].about.name", contains("Recently made", "Recent Guest", "Recently made")))
+            .andExpect(jsonPath("$.data.recentChanges[*].about.kind", contains("EPISODE", "PERSON", "EPISODE")))
+            .andExpect(jsonPath("$.data.recentChanges[0].about.code").value("gq-rc1"))
+            .andExpect(jsonPath("$.data.recentChanges[2].actor").value("ana"))
+            .andExpect(jsonPath("$.data.recentChanges[2].tool").value("assign_person_to_episode"))
+
+        // Without a token: either answer says no, as for the comments' mutations (CommentsGraphQLTest)
+        graphql("{ recentChanges { summary } }")
+            .andExpect(jsonPath("$.errors[0].extensions.classification", anyOf(equalTo("UNAUTHORIZED"), equalTo("FORBIDDEN"))))
+            .andExpect(jsonPath("$.data").value(null as Any?))
     }
 
     @Test

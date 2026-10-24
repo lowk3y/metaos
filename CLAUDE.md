@@ -105,23 +105,49 @@ yarn test       # the tests in src/**/__tests__, with vitest (./gradlew feTest, 
 - A list loads behind rows like its own (`LoadingRows.vue`), so the page doesn't jump, and what didn't load says why
   with Try again (`LoadError.vue`); `graphql.ts` words errors so they say what to do, e.g. an account not approved
   yet. Dates are in English (`DATE_LOCALE`), whatever the browser's language.
-- Home is what's being made for the team, and the latest releases for everyone: signed in, first what needs
-  attention ([`fe/src/attention.ts`](fe/src/attention.ts): recording dates that passed, recordings in the next two
-  weeks with no confirmed guest or doc, and episodes recorded 60 days ago that aren't out), then the upcoming
-  recordings and what's in production, by session with how far away it is, then the releases.
+- Home is what's being made for the team, and the latest releases for everyone (as a grid of `EpisodeCard`s). Signed
+  in, two columns: how many episodes are at each stage (`StageBar.vue`), what needs attention
+  ([`fe/src/attention.ts`](fe/src/attention.ts): recording dates that passed, recordings in the next two weeks with no
+  confirmed guest or doc, and episodes recorded 60 days ago that aren't out), then the upcoming recordings and what's
+  in production, a card a session with how far away it is (`SessionCard.vue`); at the side the latest releases and
+  what the team did lately (`RecentActivity.vue`), from `recentChanges`: the audit trail's latest changes, as
+  `History.kt` tells them, each with what it's a change to, one person's close together as one entry
+  (`recentActivity` in `activity.ts`), e.g. Created 28 episodes.
+- The list pages (Episodes, Ideas, People) have a `PageHeader` and a `FilterBar` (a box that finds as you type, with
+  `fold`, and `ChipGroup`s), and keep their filters and view in the address (`useQueryState`, `fe/src/query.ts`), so
+  a link keeps them and the server renders them. What they filter and group by is in
+  [`fe/src/lists.ts`](fe/src/lists.ts), with tests, and happens in the browser on what's loaded.
+- Every page is in one frame, 1200 px wide (`--content-width`), the header's and the footer's too, so they don't jump
+  between pages; running text keeps a measure of its own (`MarkdownText.vue`'s 680 px). The width goes to side panels,
+  grids and tables.
 - Episode titles lead to their pages, `/episodes/<code or ID>`, and for the team session labels to `/sessions/<ID>`:
-  everything about them, for the team their discussion (see Discussions) and, under it, their history on a date rail
-  (`HistoryTimeline.vue`), from the audit trail as [`History.kt`](src/main/kotlin/si/ogrodje/metaos/History.kt) tells
-  it. A released episode's page is anyone's, without what's the team's (its discussion, history, alternative titles,
-  files, ...); any other episode is the team's, and not found for anyone else, as one that isn't there.
+  a workspace (`.workspace` in `page.scss`), with the facts in a panel at the right (`FactPanel.vue`, `FactGroup.vue`,
+  `Fact.vue`: dates, session, people with their pictures (`PersonLine.vue`), where to listen, files, and what needs
+  attention by Home's rules, `episodeConcerns`), first in the page, so above the rest on phones. Once the page's title
+  has scrolled away, the panel, which stays in view, says what it's about: its cover, code and title (`PanelTitle.vue`,
+  `useScrolledPast`), also a way back to the top; a session's says its date and place. The main column has
+  the episode's media (`MediaStrip.vue`: its titles with the thumbnails they're A/B tested with and the cover, its
+  artwork marked with what each file is used as, its photos), the summaries folded when long (`FoldedText.vue`), and
+  for the team its activity (`ActivityFeed.vue`, see Discussions): comments and history in one feed, from the audit
+  trail as [`History.kt`](src/main/kotlin/si/ogrodje/metaos/History.kt) tells it. A released episode's page is
+  anyone's, without what's the team's (its activity, alternative titles, files, ...), its thumbnail large; any other
+  episode is the team's, and not found for anyone else, as one that isn't there.
+- The Episodes page lists what's in the works (the team's), then the released episodes by season, as a list
+  (`EpisodeRow`, with its cover, square, or else its thumbnail: `listPicture`) or a grid of `EpisodeCard`s (`?view=grid`), by show and season; seasons older
+  than the two latest show their first row until opened.
 - Episode ideas (`IDEA`) have a page of their own, `/ideas`, from the `ideas` query, which needs `metaos:read`, as
-  does its link in the header; the `episodes` query, and so the Episodes page, leaves them out.
+  does its link in the header; the `episodes` query, and so the Episodes page, leaves them out. It's a table
+  (`IdeaRow.vue`), grouped by how far along each is (`readiness`: in a session, with a guest, with candidates, no
+  one yet), by who recommended it, or not at all, and filtered by show and recommender.
 - The People page, `/people`, lists everyone by name (Slovenian order, past a "dr."), from the `people` query: who
-  they are, their roles and latest episodes, and links to their website and social profiles. Anyone not signed in
-  gets only those on the released episodes, with only those episodes; candidates are the team's.
+  they are, their roles and latest episodes, and links to their website and social profiles (`PersonCard.vue`). The
+  team first, as cards with their pictures large and their bios (`kindOf` in `lists.ts`: anyone credited as host, co-host, producer, consultant or designer),
+  then the guests in three columns under their letters, with an A–Z index, then, folded, the candidates. Anyone not
+  signed in gets only those on the released episodes, with only those episodes; candidates are the team's.
 - People's names (on the People page and an episode's page, and who recommended an idea) lead to their pages,
-  `/people/<ID>`, from the `person` query: who they are, where they're online, their episodes by what they are on
-  them, hosts first, each list as the session page has it, and the episodes they recommended. Anyone not signed in
+  `/people/<ID>`, from the `person` query: a workspace like an episode's, with how many episodes they're on as what
+  in its panel, each also a filter (`?role=HOST`), and where they're online; what's coming up (the team's), their
+  released episodes by season, as rows or cards, and the episodes they recommended. Anyone not signed in
   gets the page of someone on a released episode, as the People page lists them, with only those episodes.
 - Search is the team's: signed in, the header has a Search button (`SearchPalette.vue`; also ⌘K, Ctrl+K and `/`),
   which opens a few of each kind over the page, and its See all the search page, `/search?q=`, with all of them by
@@ -216,7 +242,9 @@ and delete on the domain tables to `audit_log`, with the old and new row as JSON
 read-write transaction with the signed-in user (`sub`, `preferred_username`), their OAuth client (`azp`) and the MCP tool
 that started it; writes made any other way (psql, migrations) are logged without them. `AuditLog` reads it, for the
 `get_history` and `list_recent_changes` MCP tools, for the history on the front-end's episode and session pages
-(`History.kt`, which says each change in words), and for the MCP tool each comment was written with (Discussions).
+(`History.kt`, which says each change in words, and what it's a change to, `ChangeKind`, so the front-end can group
+changes without reading their words), for the latest changes on the home page (`recentChanges`, which leaves out
+the sign-ins `AccountsFilter` keeps up to date), and for the MCP tool each comment was written with (Discussions).
 
 A new table needs its own `<table>_audit` trigger, `AuditLog.history` needs to know about new link columns, and
 `History.kt` how to say what a change to it means.
@@ -267,11 +295,15 @@ by whoever was signed in, on MetaOS's pages or over MCP. They're the team's: wri
   tells as "Commented" (with the start of its text), "Edited a comment" and "Deleted a comment". A comment's `tool`,
   shown as e.g. "MCP · comment_on_episode", is the MCP tool its insert in `audit_log` was made by
   (`AuditLog.creatingTools`); none on MetaOS's pages.
-- On the episode and session pages, the Discussion is above the History (`DiscussionSection.vue`): the comments
-  (`CommentCard.vue`), with Edit and Delete on your own, and a box for a new one (`CommentEditor.vue`), with Write and
-  Preview tabs like GitHub's. The preview renders with `MarkdownText.vue`, as posted comments do; ⌘↵ sends. A
-  comment's "commented <date>" links to it, its page's address with `#comment-<id>`: opened, the page scrolls to it
-  once its comments are there, and outlines it.
+- On the episode and session pages, the discussion and the history are one Activity feed (`ActivityFeed.vue`), by
+  day, oldest first, filtered to everything, the comments or the changes: the comments (`CommentCard.vue`), with Edit
+  and Delete on your own, the changes, and a box for a new comment (`CommentEditor.vue`), with Write and Preview tabs
+  like GitHub's. [`fe/src/activity.ts`](fe/src/activity.ts) merges them: one person's changes within 15 minutes of
+  each other are one entry, each field from what it was to what it became (a status with each step), and a folder
+  linked, unlinked and linked again linked once; writing and editing a comment that's shown are left out, as its card
+  says so, deleting one isn't. The preview renders with `MarkdownText.vue`, as posted comments do; ⌘↵ sends. A
+  comment's "commented <date>" links to it, its page's address with `#comment-<id>`: opened, the feed shows
+  everything, scrolls to it once its comments are there, and outlines it.
 
 ### Google (Drive and Gmail)
 
@@ -357,7 +389,7 @@ on `*.graphassets.com`, the only hosts MetaOS fetches pictures from).
   they were made from, e.g. "Thumbnail: ogrodje-vresGams-thumb1.png"; Hygraph's URLs have no file name, so the tools
   take one (`name`).
 - GraphQL has them as `Image` (`thumbnail`, `thumbnailB`, `thumbnailC`, `web` and `cover` on `Episode`, `avatar` on
-  `Person`), with the original's `sha256`, batched for lists; thumbnails B and C only for the team, as titles B and C are.
+  `Person` and `EpisodePerson`), with the original's `sha256`, batched for lists; thumbnails B and C only for the team, as titles B and C are.
 - The team uploads an episode's pictures from its page ([`Artwork.kt`](src/main/kotlin/si/ogrodje/metaos/Artwork.kt)):
   `artworkUpload` gives the browser a signed URL in the private bucket (`uploads/<id>`), where it sends the file itself,
   and `setEpisodeImage` publishes it as from Dropbox (`ImageSource.UPLOAD`, kept by its file's name), refusing another
@@ -365,15 +397,15 @@ on `*.graphassets.com`, the only hosts MetaOS fetches pictures from).
   the episode's first Dropbox folder too, unless the same content (Dropbox's content hash) is right in it or in a folder
   right in it, under another name ("(1)") when its own is taken; a read-only place or a missing folder only says so
   (`dropbox.error`). MCP's `set_episode_image` doesn't take uploads.
-- On the front-end, Upload artwork on the Pictures heading (`EpisodePictures.vue`, which also shows an episode without
-  pictures its five places) opens `ArtworkUpload.vue`: drop the episode's folder or pictures, or choose them, or one on
-  its row. [`fe/src/artwork.ts`](fe/src/artwork.ts) reads each file's size from its header and its SHA-256, and places
+- On the front-end, Upload artwork in the episode's media (`MediaStrip.vue`, which shows the team its five places)
+  opens `ArtworkUpload.vue`, as a missing picture's place does, at its row: drop the episode's folder or pictures, or
+  choose them, or one on its row. [`fe/src/artwork.ts`](fe/src/artwork.ts) reads each file's size from its header and its SHA-256, and places
   it by size and name (`-thumb1`/`-thumb-1`/`-thumbnail` A, `-thumb2` B, `-thumb3` C, `-web`, `-podcast`/`-cover`; the
   only square one is the cover), refusing what fits nowhere; the same file as the current one isn't sent. Upload asks
   once about every picture that would replace one, then sends them one at a time (`fe/src/uploads.ts`), each with its
   progress; one refused or failed holds nothing back, and Try again sends only that one. The front-end shows an episode's on
-  its page (`EpisodePictures.vue`) and avatars on the People and person pages (`PersonAvatar.vue`, initials without
-  one), with `srcset` from the copies (`fe/src/images.ts`), never the original, which may be 16 MB.
+  its page (`MediaStrip.vue`) and avatars on the People, person and episode pages (`PersonAvatar.vue`, initials
+  without one), with `srcset` from the copies (`fe/src/images.ts`), never the original, which may be 16 MB.
 - `ImagesTest` and `ArtworkTest` run against buckets in memory (`FakeStorage`), with fake Dropbox and Koofr.
 
 ### Koofr
@@ -427,9 +459,9 @@ folders and moves or renames, but never deletes or replaces anything unasked.
 - On the front-end, a linked folder shows like a Koofr one: Dropbox's logo in lists, and in the episode's and session's
   details, opening its link for members, or else its path in Dropbox's web app as the bot has it. Lists ask Dropbox
   where the folders are once per place and minute (`DropboxFolderIndex`), not per folder.
-- An episode's page shows the pictures in its folders as its Artwork, above its photos and like them, eight at a
-  time: each whole, as covers,
-  thumbnails and stories have different shapes, and by file name, as that says what it's for. As with Koofr's photos,
+- An episode's page shows the pictures in its folders as its Artwork, a tab of its media beside its photos and like
+  them, eight at a time: each whole, as covers, thumbnails and stories have different shapes, by file name, as that
+  says what it's for, and with what it's used as, e.g. Thumbnail A, by the file its picture was made from. As with Koofr's photos,
   they're those right in a folder, then those in the folders right in it ([`DropboxPictures.kt`](src/main/kotlin/si/ogrodje/metaos/DropboxPictures.kt)).
   Dropbox makes the thumbnails; MetaOS passes them on at `/dropbox/thumbnail`, behind `metaos:read` and only for those
   pictures, which it checks against the linked folders' IDs through `DropboxFolderIndex`.

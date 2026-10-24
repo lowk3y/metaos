@@ -22,6 +22,8 @@ export interface EpisodePerson {
   personId: string
   name: string
   roles: Role[]
+  // Only where a page asks for it, e.g. an episode's
+  avatar?: Image | null
 }
 
 /** A Google Doc linked to an episode or a session; only signed-in users get them */
@@ -56,6 +58,9 @@ export interface Episode {
   patreonUrl: string | null
   // Markdown, e.g. a sentence
   tinySummary: string | null
+  // 16:9, and square, e.g. for podcast apps: where a list asks for them (LIST_PICTURE_FIELDS)
+  thumbnail?: Image | null
+  cover?: Image | null
   people: EpisodePerson[]
   documents: GoogleDoc[]
   koofrFolders: KoofrFolderLink[]
@@ -117,12 +122,30 @@ export interface FieldChange {
   to: string | null
 }
 
+/** What a change is to (ChangeKind in the schema) */
+export type ChangeKind =
+  | 'EPISODE' | 'SESSION' | 'PERSON' | 'DOCUMENT' | 'KOOFR_FOLDER' | 'DROPBOX_FOLDER' | 'COMMENT' | 'ACCOUNT' | 'OTHER'
+
+/** The episode, session or person a change is to, e.g. on the home page's recent activity */
+export interface ChangeSubject {
+  kind: 'EPISODE' | 'SESSION' | 'PERSON'
+  id: string
+  // An episode's title, a session's date and place, a person's name
+  name: string
+  code: string | null
+}
+
 /** A change from the audit log, told as what happened */
 export interface Change {
   at: string
   actor: string | null
   client: string | null
   tool: string | null
+  kind: ChangeKind
+  // The comment it's a change to, when it's one to a comment
+  commentId: string | null
+  // What it's a change to, among the latest changes to everything (recentChanges); not in a page's own history
+  about?: ChangeSubject | null
   summary: string
   fields: FieldChange[]
 }
@@ -131,6 +154,8 @@ export interface Change {
 export interface PersonName {
   id: string
   name: string
+  // Where a page asks for it, e.g. the Ideas page
+  avatar?: Image | null
 }
 
 /** An episode idea, as the Ideas page lists them: with when it was added, as they're listed the newest first */
@@ -187,7 +212,16 @@ export function photosOf(folders: KoofrFolder[]) {
 export function artworkOf(folders: DropboxFolderWithPictures[]) {
   return folders.flatMap((folder) => folder.pictures)
 }
-export const HISTORY_FIELDS = 'history { at actor client tool summary fields { field from to } }'
+// A change's own fields, as an episode's or session's history has them and the latest changes too
+export const CHANGE_FIELDS = 'at actor client tool kind commentId summary fields { field from to }'
+export const HISTORY_FIELDS = `history { ${CHANGE_FIELDS} }`
+// An episode's thumbnail and cover, for a list of them
+export const LIST_PICTURE_FIELDS = `thumbnail { ${IMAGE_FIELDS} } cover { ${IMAGE_FIELDS} }`
+
+/** An episode's picture in a list, a row each: its cover, which is square, or else its thumbnail, cropped to a square */
+export function listPicture(episode: Pick<Episode, 'cover' | 'thumbnail'>) {
+  return episode.cover ?? episode.thumbnail ?? null
+}
 // An episode's thumbnails, web picture and cover, from MetaOS's public bucket
 export const PICTURE_FIELDS = ['thumbnail', 'thumbnailB', 'thumbnailC', 'web', 'cover'].map((kind) => `${kind} { ${IMAGE_FIELDS} }`).join(' ')
 
